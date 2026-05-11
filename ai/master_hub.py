@@ -136,16 +136,20 @@ elif channel == "📜 AI 自動寫腳本":
         with open(os.path.join(LOG_DIR, f"script_{datetime.datetime.now().strftime('%m%d_%H%M')}.md"), "w", encoding="utf-8") as f:
             f.write(res.text)
 
-# --- 🔍 歷史查詢 ---
+# --- 🔍 歷史查詢 (修復版) ---
 elif channel == "🔍 歷史查詢":
     st.title("🔍 歷史日誌查詢")
     q = st.text_input("關鍵字搜尋")
-    files = sorted(os.listdir(LOG_DIR), reverse=True)
-    for fn in files:
-        with open(os.path.join(LOG_DIR, fn), "r", encoding="utf-8") as f:
-            c = f.read()
-            if not q or q.lower() in c.lower():
-                with st.expander(f"📅 {fn}"): st.markdown(c)
+    if os.path.exists(LOG_DIR):
+        files = sorted(os.listdir(LOG_DIR), reverse=True)
+        for fn in files:
+            f_path = os.path.join(LOG_DIR, fn)
+            # 關鍵修正：跳過資料夾
+            if os.path.isfile(f_path) and fn.endswith('.md'):
+                with open(f_path, "r", encoding="utf-8") as f:
+                    c = f.read()
+                    if not q or q.lower() in c.lower():
+                        with st.expander(f"📅 {fn}"): st.markdown(c)
 
 # --- 📂 專案檔案總管 ---
 elif channel == "📂 專案檔案總管":
@@ -162,15 +166,22 @@ elif channel == "📂 專案檔案總管":
                 with open(f_p, "w", encoding="utf-8") as f: f.write(new_c)
                 st.success("已更新")
 
-# --- 📖 智慧答案之書 ---
+# --- 📖 智慧答案之書 (修復版) ---
 elif channel == "📖 智慧答案之書":
     st.title("📖 答案之書")
     if st.button("🔮 擷取啟示"):
         all_lines = []
-        for fn in os.listdir(LOG_DIR):
-            with open(os.path.join(LOG_DIR, fn), "r", encoding="utf-8") as f:
-                all_lines.extend([l.strip() for l in f.readlines() if len(l.strip()) > 15])
-        if all_lines: st.info(random.choice(all_lines))
+        if os.path.exists(LOG_DIR):
+            for fn in os.listdir(LOG_DIR):
+                f_path = os.path.join(LOG_DIR, fn)
+                # 關鍵修正：確保它是檔案且是 .md 檔，才讀取
+                if os.path.isfile(f_path) and fn.endswith('.md'):
+                    with open(f_path, "r", encoding="utf-8") as f:
+                        all_lines.extend([l.strip() for l in f.readlines() if len(l.strip()) > 15])
+        if all_lines: 
+            st.info(random.choice(all_lines))
+        else:
+            st.warning("日誌庫中沒有足夠的文字啟示。")
 
 # --- 🛠️ 管理部署 ---
 elif channel == "🛠️ 管理部署":
@@ -196,3 +207,4 @@ if st.session_state.last_ai_res and channel in ["💡 跨模態分析", "📜 AI
             code = blocks[-2].split("\n", 1)[1] if len(blocks) >= 3 else st.session_state.last_ai_res
             with open(os.path.join(p, target), "w", encoding="utf-8") as f: f.write(code.strip())
             st.success(f"✅ 已成功覆寫檔案：{target}")
+
