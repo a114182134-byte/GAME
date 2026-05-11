@@ -4,30 +4,24 @@ from PIL import Image
 import os, datetime, json, random, requests
 
 # ==========================================
-# 0. 核心自動更新系統 (啟動即同步)
+# 0. 核心自動更新系統
 # ==========================================
 GITHUB_RAW_URL = "https://raw.githubusercontent.com/a114182134-byte/GAME/main/ai/master_hub.py"
 
 def auto_update():
     try:
-        # 抓取雲端最新代碼
         response = requests.get(GITHUB_RAW_URL, timeout=5)
         if response.status_code == 200:
             new_code = response.text
-            # 讀取本地目前運行的檔案內容
             with open(__file__, "r", encoding="utf-8") as f:
                 current_code = f.read()
-            
-            # 如果內容不一致，執行物理覆寫
             if new_code.strip() != current_code.strip():
                 with open(__file__, "w", encoding="utf-8") as f:
                     f.write(new_code)
                 st.toast("🚀 偵測到新版本，已自動完成物理同步！")
                 st.rerun() 
-    except Exception:
-        pass # 離線或錯誤時跳過，確保程式能正常啟動
+    except Exception: pass
 
-# 啟動時先執行檢查
 auto_update()
 
 # ==========================================
@@ -36,7 +30,7 @@ auto_update()
 BASE_PATH = "all_projects"
 CONFIG_FILE = os.path.join(BASE_PATH, "projects_config.json")
 
-st.set_page_config(page_title="小白龍開發母站 - 旗艦完全體", layout="wide", page_icon="⚓")
+st.set_page_config(page_title="小白龍開發母站 - 全功能旗艦版", layout="wide", page_icon="⚓")
 
 if "session_key" not in st.session_state: st.session_state.session_key = ""
 if "last_ai_res" not in st.session_state: st.session_state.last_ai_res = ""
@@ -50,15 +44,12 @@ def init_system():
         return init
     with open(CONFIG_FILE, "r", encoding="utf-8") as f:
         data = json.load(f)
-        for p in data:
-            if "keys_list" not in data[p]: data[p]["keys_list"] = []
-            if "local_script_path" not in data[p]: data[p]["local_script_path"] = ""
         return data
 
 PROJECTS = init_system()
 
 # ==========================================
-# 2. 側邊欄與頻道切換
+# 2. 側邊欄中控
 # ==========================================
 with st.sidebar:
     st.title("⚙️ 核心中控台")
@@ -75,101 +66,137 @@ with st.sidebar:
     if st.button("🔐 鎖定並儲存金鑰"):
         st.session_state.session_key = input_key
         if input_key and input_key not in saved_keys:
-            PROJECTS[current_p]["keys_list"].append(input_key)
+            PROJECTS[current_p].setdefault("keys_list", []).append(input_key)
             with open(CONFIG_FILE, "w", encoding="utf-8") as f: json.dump(PROJECTS, f, indent=4, ensure_ascii=False)
-        st.success("已更新金鑰配置")
+        st.success("金鑰已備份")
 
     st.divider()
-    channel = st.radio("功能頻道", ["📜 AI 自動寫腳本", "📂 專案檔案總管", "📖 智慧答案之書", "🛠️ 管理部署"])
+    channel = st.radio("功能頻道", ["💡 跨模態分析", "📜 AI 自動寫腳本", "📂 專案檔案總管", "🔍 歷史查詢", "📖 智慧答案之書", "🛠️ 管理部署"])
 
 ACTIVE_KEY = st.session_state.session_key if st.session_state.session_key else input_key
 st.markdown(f"<style>.main {{ background-color: {config['bg_color']}; color: {config['theme_color']}; }}</style>", unsafe_allow_html=True)
 
+# 資料夾建立
 LOG_DIR = os.path.join(BASE_PATH, current_p, "logs")
-if not os.path.exists(LOG_DIR): os.makedirs(LOG_DIR)
+MEDIA_DIR = os.path.join(BASE_PATH, current_p, "media")
+for d in [LOG_DIR, MEDIA_DIR]:
+    if not os.path.exists(d): os.makedirs(d)
 
 # ==========================================
 # 3. 頻道功能實作
 # ==========================================
 
-# --- 腳本生成與物理同步 ---
-if channel == "📜 AI 自動寫腳本":
-    st.title(f"📜 核心代碼生成器 ({AI_MODEL})")
-    task_desc = st.text_area("🔧 描述需求", height=150)
+# --- 💡 跨模態分析 (含圖片/音效儲存) ---
+if channel == "💡 跨模態分析":
+    st.title("💡 跨模態分析引擎")
+    col_input, col_preview = st.columns([1, 1])
     
-    if st.button("🪄 生成架構"):
-        if not ACTIVE_KEY: st.error("❌ 未鎖定金鑰")
+    with col_input:
+        user_text = st.text_area("✍️ 輸入指令或描述", placeholder="分析圖片美學或處理音效需求...")
+        uploaded_img = st.file_uploader("🖼️ 上傳圖片 (PNG/JPG)", type=['png', 'jpg', 'jpeg'])
+        uploaded_audio = st.file_uploader("🎵 上傳音訊 (MP3/WAV)", type=['mp3', 'wav'])
+        
+    if st.button("🚀 執行多模態分析"):
+        if not ACTIVE_KEY: st.error("❌ 請先鎖定金鑰")
         else:
-            with st.spinner("AI 思考中..."):
+            with st.spinner("AI 正在處理素材..."):
                 genai.configure(api_key=ACTIVE_KEY)
                 model = genai.GenerativeModel(AI_MODEL, system_instruction=config["prompt"])
-                res = model.generate_content(f"Godot 4.x。{task_desc}")
+                payload = [user_text if user_text else "請分析這些素材"]
+                
+                if uploaded_img:
+                    img_data = Image.open(uploaded_img)
+                    payload.append(img_data)
+                    # 實體儲存
+                    img_data.save(os.path.join(MEDIA_DIR, f"img_{datetime.datetime.now().strftime('%m%d_%H%M')}.png"))
+                
+                if uploaded_audio:
+                    audio_bytes = uploaded_audio.read()
+                    payload.append({"mime_type": uploaded_audio.type, "data": audio_bytes})
+                    # 實體儲存
+                    with open(os.path.join(MEDIA_DIR, uploaded_audio.name), "wb") as f:
+                        f.write(audio_bytes)
+                
+                res = model.generate_content(payload)
                 st.session_state.last_ai_res = res.text
                 st.markdown(res.text)
-                with open(os.path.join(LOG_DIR, f"{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.md"), "w", encoding="utf-8") as f:
+                # 儲存對話日誌
+                with open(os.path.join(LOG_DIR, f"log_{datetime.datetime.now().strftime('%Y%m%d_%H%M')}.md"), "w", encoding="utf-8") as f:
                     f.write(res.text)
 
-# --- 智慧答案之書 ---
-elif channel == "📖 智慧答案之書":
-    st.title("📖 答案之書")
-    if st.button("🔮 擷取啟示"):
-        lines = []
-        for r, _, fs in os.walk(LOG_DIR):
-            for f in fs:
-                if f.endswith(".md"):
-                    with open(os.path.join(r, f), "r", encoding="utf-8") as file:
-                        lines.extend([l.strip() for l in file.readlines() if len(l.strip()) > 15])
-        if lines:
-            st.info(f"『 {random.choice(lines)} 』")
-            st.balloons()
+# --- 📜 AI 自動寫腳本 (含物理同步) ---
+elif channel == "📜 AI 自動寫腳本":
+    st.title(f"📜 核心代碼生成器 ({AI_MODEL})")
+    task_desc = st.text_area("🔧 描述腳本功能", height=150)
+    if st.button("🪄 生成代碼"):
+        if not ACTIVE_KEY: st.error("❌ 未鎖定金鑰")
+        else:
+            with st.spinner("AI 重構中..."):
+                genai.configure(api_key=ACTIVE_KEY)
+                model = genai.GenerativeModel(AI_MODEL, system_instruction=config["prompt"])
+                res = model.generate_content(f"使用 Godot 4.x。{task_desc}")
+                st.session_state.last_ai_res = res.text
+                st.markdown(res.text)
+                with open(os.path.join(LOG_DIR, f"script_{datetime.datetime.now().strftime('%Y%m%d_%H%M')}.md"), "w", encoding="utf-8") as f:
+                    f.write(res.text)
 
-# (檔案總管與管理部署保持之前的邏輯...)
+# --- 🔍 歷史查詢功能 ---
+elif channel == "🔍 歷史查詢":
+    st.title("🔍 專案歷史查詢")
+    search_q = st.text_input("輸入關鍵字搜尋日誌内容...")
+    
+    log_files = sorted(os.listdir(LOG_DIR), reverse=True)
+    for f_name in log_files:
+        f_path = os.path.join(LOG_DIR, f_name)
+        with open(f_path, "r", encoding="utf-8") as f:
+            content = f.read()
+            if not search_q or search_q.lower() in content.lower():
+                with st.expander(f"📅 {f_name}"):
+                    st.markdown(content)
+
+# --- 其他功能保持不變 ---
 elif channel == "📂 專案檔案總管":
     st.title("📂 實體檔案管理")
     path = config.get("local_script_path", "")
     if path and os.path.exists(path):
-        files = [f for f in os.listdir(path) if os.path.isfile(os.path.join(path, f))]
-        selected = st.selectbox("選取檔案", files)
-        if selected:
-            f_p = os.path.join(path, selected)
-            with open(f_p, "r", encoding="utf-8") as f:
-                content = st.text_area("檔案內容", f.read(), height=400)
-            if st.button("💾 儲存修改"):
-                with open(f_p, "w", encoding="utf-8") as f: f.write(content)
-                st.success("已更新實體檔案")
+        files = [f for f in os.listdir(path) if f.endswith('.gd')]
+        sel_f = st.selectbox("編輯腳本", files)
+        if sel_f:
+            with open(os.path.join(path, sel_f), "r", encoding="utf-8") as f:
+                new_c = st.text_area("內容", f.read(), height=400)
+            if st.button("💾 物理儲存"):
+                with open(os.path.join(path, sel_f), "w", encoding="utf-8") as f: f.write(new_c)
+                st.success("已更新")
+
+elif channel == "📖 智慧答案之書":
+    st.title("📖 答案之書")
+    if st.button("🔮 擷取啟示"):
+        all_txt = []
+        for fn in os.listdir(LOG_DIR):
+            with open(os.path.join(LOG_DIR, fn), "r", encoding="utf-8") as f:
+                all_txt.extend([l for l in f.readlines() if len(l) > 20])
+        if all_txt: st.info(random.choice(all_txt))
 
 elif channel == "🛠️ 管理部署":
     st.title("🛠️ 配置中心")
-    with st.form("settings"):
+    with st.form("set"):
         p_path = st.text_input("💻 Godot Scripts 資料夾絕對路徑", config.get("local_script_path", ""))
-        p_prompt = st.text_area("🤖 AI 公約", config.get("prompt", ""))
-        if st.form_submit_button("💾 儲存配置"):
+        p_prompt = st.text_area("🤖 AI 指令公約", config.get("prompt", ""))
+        if st.form_submit_button("💾 儲存設定"):
             PROJECTS[current_p].update({"local_script_path": p_path, "prompt": p_prompt})
             with open(CONFIG_FILE, "w", encoding="utf-8") as f: json.dump(PROJECTS, f, indent=4, ensure_ascii=False)
-            st.success("設定更新成功")
+            st.success("設定成功")
 
-# ==========================================
-# 4. 🔥 物理干涉：字串分割版 (修正紅字)
-# ==========================================
-if st.session_state.last_ai_res and channel == "📜 AI 自動寫腳本":
+# --- 🔥 物理干涉引擎 (置底顯示) ---
+if st.session_state.last_ai_res and channel in ["💡 跨模態分析", "📜 AI 自動寫腳本"]:
     st.divider()
     st.subheader("🚀 物理同步面板")
     path = config.get("local_script_path", "")
     if path and os.path.exists(path):
-        existing_gd = [f for f in os.listdir(path) if f.endswith('.gd')]
-        target_file = st.selectbox("🎯 目標腳本", ["建立新檔案"] + existing_gd)
-        if target_file == "建立新檔案": target_file = st.text_input("新檔名", value="new_script.gd")
-        
-        if st.button("🔥 執行物理同步"):
+        target = st.selectbox("🎯 目標檔案", ["新檔案"] + [f for f in os.listdir(path) if f.endswith('.gd')])
+        if target == "新檔案": target = st.text_input("命名", value="new_script.gd")
+        if st.button("🔥 物理寫入"):
             blocks = st.session_state.last_ai_res.split("```")
-            if len(blocks) >= 3:
-                raw_block = blocks[-2]
-                block_lines = raw_block.split("\n")
-                final_code = "\n".join(block_lines[1:]).strip() if len(block_lines) > 1 else raw_block.strip()
-            else:
-                final_code = st.session_state.last_ai_res.strip()
-            
-            with open(os.path.join(path, target_file), "w", encoding="utf-8") as f:
-                f.write(final_code)
-            st.success(f"✅ AI 已直接修改硬碟檔案：{target_file}")
-            st.balloons()
+            code = blocks[-2].split("\n", 1)[1] if len(blocks) >= 3 else st.session_state.last_ai_res
+            with open(os.path.join(path, target), "w", encoding="utf-8") as f: f.write(code.strip())
+            st.success(f"✅ 已寫入：{target}")
