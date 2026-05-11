@@ -11,7 +11,7 @@ echo 正在連線至 GitHub 獲取最新「旗艦完全體」代碼...
 echo.
 
 :: 設定你的 GitHub Raw 網址 (請把下面的網址換成你剛才複製的)
-set "raw.githubusercontent.com/a114182134-byte/GAME/refs/heads/main/ai/master_hub.py?token=GHSAT0AAAAAAD4YNFDOE2RNOP6H4XJHRFDU2QCKESQ"
+set "https://raw.githubusercontent.com/a114182134-byte/GAME/refs/heads/main/ai/master_hub.py"
 
 :: 使用 PowerShell 下載檔案並覆蓋
 powershell -Command "(New-Object Net.WebClient).DownloadFile('%RAW_URL%', 'master_hub.py')"
