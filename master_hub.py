@@ -111,16 +111,41 @@ MEDIA_DIR = os.path.join(DATA_ROOT, current_p_name, "media")
 for d in [LOG_DIR, MEDIA_DIR]: 
     if not os.path.exists(d): os.makedirs(d)
 
-# 4. 頻道實作 (精簡核心邏輯)
 if channel == "💡 媒體採集":
-    st.title("💡 媒體採集與分析")
-    u_text = st.text_input("分析指令")
-    u_img = st.file_uploader("🖼️ 儲存圖片", type=['png', 'jpg'])
+    st.title("💡 媒體採集與跨模態分析")
+    st.markdown("---")
+    u_text = st.text_area("🧠 分析指令", placeholder="描述需求...")
+    col1, col2 = st.columns(2)
+    with col1:
+        u_img = st.file_uploader("🖼️ 儲存並分析圖片", type=['png', 'jpg', 'jpeg'])
+    with col2:
+        u_audio = st.file_uploader("🎵 儲存並分析音訊", type=['mp3', 'wav', 'ogg'])
+    
     if st.button("🚀 執行與儲存"):
-        if u_img:
-            img = Image.open(u_img)
-            img.save(os.path.join(MEDIA_DIR, f"save_{datetime.datetime.now().strftime('%H%M%S')}.png"))
-            st.success("圖片已入庫")
+        if not (u_img or u_audio or u_text):
+            st.warning("請提供素材。")
+        else:
+            with st.spinner("存檔中..."):
+                model = genai.GenerativeModel(AI_MODEL)
+                content_payload = [u_text if u_text else "分析此媒體"]
+                ts = datetime.datetime.now().strftime('%m%d_%H%M%S')
+                if u_img:
+                    img = Image.open(u_img)
+                    p = os.path.join(MEDIA_DIR, f"img_{ts}.png")
+                    img.save(p)
+                    content_payload.append(img)
+                if u_audio:
+                    data = u_audio.read()
+                    p = os.path.join(MEDIA_DIR, u_audio.name)
+                    with open(p, "wb") as f: f.write(data)
+                    content_payload.append({"mime_type": u_audio.type, "data": data})
+                if FINAL_KEY:
+                    res = model.generate_content(content_payload)
+                    st.write(res.text)
+                    with open(os.path.join(LOG_DIR, "media_log.md"), "a", encoding="utf-8") as f:
+                        f.write(f"\n## {datetime.datetime.now()}\n{res.text}\n")
+    st.divider()
+    st.caption(f"💾 目前存儲路徑：{MEDIA_DIR}")
 
 elif channel == "📜 AI 寫腳本":
     st.title("📜 AI 自動寫腳本")
@@ -195,43 +220,52 @@ elif channel == "📂 檔案修復":
         st.info("請前往『🛠️ 管理部署』頻道設定正確的『Godot 腳本路徑』。")
 
 elif channel == "📖 答案之書":
-    st.title("📖 智慧答案之書")
+    st.title("📖 智慧答案之書：多模態啟示")
     st.markdown("---")
     
-    # 建立啟示抽取按鈕
     if st.button("🔮 擷取靈魂啟示"):
-        # 建立備用啟示庫（當日誌不足時使用）
-        backup_quotes = [
-            "代碼如火，邏輯如鋼。",
-            "鏽蝕之中，方見重生。",
-            "保持航向，莫入虛空。",
-            "黃銅的齒輪從不說謊。",
-            "每一次崩潰，都是進化的契機。"
-        ]
+        # 1. 準備啟示池
+        text_pool = []
+        img_pool = []
+        audio_pool = []
         
-        pool = []
-        # 嘗試從該專案的日誌資料夾中讀取內容
+        # 2. 物理打撈：從日誌與媒體資料夾中獲取素材
         if os.path.exists(LOG_DIR):
-            for root, dirs, files in os.walk(LOG_DIR):
-                for fn in files:
-                    if fn.endswith('.md'):
-                        with open(os.path.join(root, fn), "r", encoding="utf-8") as f:
-                            # 讀取非空白且長度足夠的行作為啟示
-                            lines = [l.strip() for l in f.readlines() if len(l.strip()) > 5]
-                            pool.extend(lines)
+            for fn in os.listdir(LOG_DIR):
+                if fn.endswith('.md'):
+                    with open(os.path.join(LOG_DIR, fn), "r", encoding="utf-8") as f:
+                        text_pool.extend([l.strip() for l in f.readlines() if len(l.strip()) > 10])
         
-        # 決定最終顯示內容
-        if pool:
-            # 優先從你的開發歷史中抽取啟示
-            revelation = random.choice(pool)
-            st.info(f"⚓ **來自開發日誌的啟示：**\n\n{revelation}")
+        if os.path.exists(MEDIA_DIR):
+            for fn in os.listdir(MEDIA_DIR):
+                full_p = os.path.join(MEDIA_DIR, fn)
+                if fn.lower().endswith(('.png', '.jpg', '.jpeg')):
+                    img_pool.append(full_p)
+                elif fn.lower().endswith(('.mp3', '.wav', '.ogg')):
+                    audio_pool.append(full_p)
+
+        # 3. 隨機觸發啟示邏輯
+        st.subheader("⚓ 來自虛空的指引")
+        
+        # 隨機抽取一段文字
+        if text_pool:
+            revelation = random.choice(text_pool)
+            st.info(f"📜 **文字啟示：**\n\n{revelation}")
         else:
-            # 日誌庫空虛時的隨機語錄
-            revelation = random.choice(backup_quotes)
-            st.success(f"✨ **架構師語錄：**\n\n{revelation}")
+            st.info("📜 **文字啟示：**\n\n『航道尚未開啟，請先在開發頻道留下足跡。』")
+
+        # 隨機抽取一張圖片 (50% 機率出現)
+        if img_pool and random.random() > 0.5:
+            st.image(random.choice(img_pool), caption="🖼️ 過去的視覺殘影", use_column_width=True)
             
+        # 隨機抽取一段音訊 (30% 機率出現)
+        if audio_pool and random.random() > 0.7:
+            target_audio = random.choice(audio_pool)
+            st.write(f"🎵 **聽見迴聲：** {os.path.basename(target_audio)}")
+            st.audio(target_audio)
+
     st.divider()
-    st.caption("※ 答案之書會自動分析你的開發日誌，將你過去的思考轉化為未來的指引。")
+    st.caption("※ 答案之書會隨機連結你的開發記憶，幫助你找回《餘燼航路》的初心。")
 elif channel == "🛠️ 管理部署":
     st.title("🛠️ 專案管理與同步")
     st.markdown("---")
