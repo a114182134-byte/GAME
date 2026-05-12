@@ -55,7 +55,7 @@ def secure_auto_push(commit_message):
             subprocess.run(["git", "remote", "add", "origin", "https://github.com/a114182134-byte/GAME.git"], check=True)
 
         # 維護排除清單
-        ignore_content = ".env\n__pycache__/\nall_projects/media/\nall_projects/logs/"
+        ignore_content = ".env\n__pycache__/\n*.json\nall_projects/media/\nall_projects/logs/"
         with open(BASE_PATH / ".gitignore", "w") as f: f.write(ignore_content)
 
         if not os.getenv("github_token"):
