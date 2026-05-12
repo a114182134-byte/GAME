@@ -157,7 +157,8 @@ with st.sidebar:
     AI_MODEL_DISPLAY = st.selectbox("核心版本", [
         "Gemini 2.5 Flash ", 
         "Gemini 2.0 Flash ", 
-        "Gemini 3.1 Flash "
+        "Gemini 3.1 Flash ",
+        "Gemini Flash "
     ])
     
     # ✨ 建立精準映射，避免 KeyError
@@ -165,7 +166,8 @@ with st.sidebar:
     model_map = {
         "Gemini 2.5 Flash ": "models/gemini-2.5-flash", 
         "Gemini 2.0 Flash ": "models/gemini-2.0-flash", 
-        "Gemini 3.1 Flash ": "models/gemini-3.1-flash-lite"
+        "Gemini 3.1 Flash ": "models/gemini-3.1-flash-lite",
+        "Gemini Flash ": "models/gemini-flash-latest"
     }
     
     # 從字典獲取對應的 API 字串
@@ -205,20 +207,19 @@ if channel == "📸 素材打撈 (Media)":
     st.markdown("---")
 
     # ⚡ 核心優化：發射站與設備識別
-    # 嘗試從瀏覽器資訊判斷設備 (簡單識別手機或電腦)
     ua = st.context.headers.get("User-Agent", "").lower()
     dev_type = "行動裝置" if "mobile" in ua else "核心主機"
     
     col_loc, col_info = st.columns([1, 2])
     with col_loc:
-        # 讓家人選擇地點，預設為總部
+        # 地點選擇，影響後續所有存檔的前綴
         station_origin = st.selectbox("📍 當前發射站", ["總部 (acer)", "台北站", "新竹站", "台南站"])
     with col_info:
         st.caption(f"📡 偵測設備類型：`{dev_type}`")
         st.caption(f"🌍 接入網址：`{st.context.headers.get('Host')}`")
 
     # 1. 指令輸入區域
-    u_text = st.text_area("🧠 分析指令 (或用語音輸入後自動填充)", placeholder="描述你的開發需求或靈感...", help="這些文字會連同媒體一起交給 AI 處理。")
+    u_text = st.text_area("🧠 分析指令 (或用語音輸入後自動填充)", placeholder="描述你的開發需求、二姊的畫作靈感...", help="這些文字會連同媒體一起交給 AI 處理。")
     
     st.subheader("🎤 語音靈感捕捉")
     from audio_recorder_streamlit import audio_recorder
@@ -231,12 +232,11 @@ if channel == "📸 素材打撈 (Media)":
     )
 
     # ---------------------------------------------------------
-    # ⚡ [自動入庫監聽器] - 加入地點標記的錄音攔截
+    # ⚡ [自動入庫監聽器] - 錄音攔截
     # ---------------------------------------------------------
     if audio_bytes:
         if "last_mic_data" not in st.session_state or st.session_state.last_mic_data != audio_bytes:
             timestamp = datetime.datetime.now().strftime('%m%d_%H%M%S')
-            # 檔名加入地點資訊，例如: mic_台北站_0512_155149.wav
             mic_name = f"mic_{station_origin}_{timestamp}.wav"
             mic_path = os.path.join(MEDIA_DIR, mic_name)
             
@@ -252,31 +252,37 @@ if channel == "📸 素材打撈 (Media)":
 
     st.divider()
     
-    # 2. 檔案上傳區
+    # 2. 檔案上傳區 (核心改進：強化圖片存檔與預覽)
     col1, col2 = st.columns(2)
     with col1:
-        u_img = st.file_uploader("🖼️ 影像打撈", type=['png', 'jpg', 'jpeg'])
+        u_img = st.file_uploader("🖼️ 影像打撈 (二姊的畫作)", type=['png', 'jpg', 'jpeg', 'webp'])
         if u_img:
-            # 圖片也加入地點前綴 (選擇性)
-            img_path = os.path.join(MEDIA_DIR, f"{station_origin}_{u_img.name}")
+            # 檔名處理：[地點]_[原始檔名]
+            img_filename = f"{station_origin}_{u_img.name}"
+            img_path = os.path.join(MEDIA_DIR, img_filename)
+            
+            from PIL import Image
+            img = Image.open(u_img)
+            st.image(img, caption="🚀 待上傳影像預覽", use_column_width=True)
+            
             if not os.path.exists(img_path):
-                from PIL import Image
-                img = Image.open(u_img)
                 img.save(img_path)
                 st.sidebar.success(f"🖼️ 影像已存入 {station_origin} 倉庫")
 
     with col2:
-        u_audio = st.file_uploader("🎵 音訊打撈", type=['mp3', 'wav', 'ogg', 'm4a'])
+        u_audio = st.file_uploader("🎵 音訊打撈 (BGM/音樂素材)", type=['mp3', 'wav', 'ogg', 'm4a'])
         if u_audio:
-            a_path = os.path.join(MEDIA_DIR, f"{station_origin}_{u_audio.name}")
+            audio_filename = f"{station_origin}_{u_audio.name}"
+            a_path = os.path.join(MEDIA_DIR, audio_filename)
             if not os.path.exists(a_path):
                 with open(a_path, "wb") as f:
                     f.write(u_audio.getbuffer())
                 st.sidebar.success(f"🎵 音訊已存入 {station_origin} 倉庫")
+            st.audio(u_audio)
 
     st.markdown("---")
     
-    # 3. 執行 AI 分析按鈕 (同步時間與地點資訊)
+    # 3. 執行 AI 分析按鈕 (強化日誌連結能力)
     if st.button("🚀 啟動跨模態解析 (AI 思考)"):
         if not (u_img or u_audio or u_text or audio_bytes):
             st.warning("📡 偵測不到感測器數據，請先提供素材或錄音。")
@@ -288,49 +294,49 @@ if channel == "📸 素材打撈 (Media)":
                 
                 model = genai.GenerativeModel(AI_MODEL)
                 content_payload = []
-                # 確保按鈕觸發時生成的檔名也帶地點
-                mic_name = f"mic_{station_origin}_{timestamp}.wav" if audio_bytes else "無"
                 
-                if audio_bytes:
-                    mic_path = os.path.join(MEDIA_DIR, mic_name)
-                    with open(mic_path, "wb") as f:
-                        f.write(audio_bytes)
-                    content_payload.append({"mime_type": "audio/wav", "data": audio_bytes})
-                
+                # 處理上傳的圖片
+                img_ref_name = "無"
                 if u_img:
-                    from PIL import Image
+                    img_ref_name = f"{station_origin}_{u_img.name}"
                     img = Image.open(u_img)
                     content_payload.append(img)
-                    img.save(os.path.join(MEDIA_DIR, f"{station_origin}_{u_img.name}"))
                 
+                # 處理即時語音
+                mic_ref_name = f"mic_{station_origin}_{timestamp}.wav" if audio_bytes else "無"
+                if audio_bytes:
+                    content_payload.append({"mime_type": "audio/wav", "data": audio_bytes})
+                
+                # 處理上傳音訊
+                audio_ref_name = f"{station_origin}_{u_audio.name}" if u_audio else "無"
                 if u_audio:
-                    a_data = u_audio.read()
-                    content_payload.append({"mime_type": u_audio.type, "data": a_data})
+                    u_audio.seek(0) # 重新讀取
+                    content_payload.append({"mime_type": u_audio.type, "data": u_audio.read()})
 
-                final_prompt = u_text if u_text else "請分析以上媒體內容。"
+                final_prompt = u_text if u_text else "請分析以上媒體內容並整理成日誌。"
                 content_payload.insert(0, final_prompt)
 
                 try:
                     if FINAL_KEY:
                         response = model.generate_content(content_payload)
                         st.markdown(f"### 📝 AI 綜合分析報告 (來源：{station_origin})")
-                        
-                        if audio_bytes:
-                            st.write(f"🎙️ **語音來源：{station_origin} | 檔名：{mic_name}**")
-                            st.audio(audio_bytes, format="audio/wav")
-                        
                         st.write(response.text)
                         
-                        # --- 寫入航行日誌 (標註發射站) ---
-                        log_file = os.path.join(LOG_DIR, "media_log.md")
+                        # --- 核心邏輯：寫入航行日誌 (關鍵在於寫入檔名，日誌頻道才能自動顯像) ---
+                        log_file = os.path.join(LOG_DIR, f"log_{timestamp}.md")
                         with open(log_file, "a", encoding="utf-8") as f:
-                            # 加入 [地點標記] 方便搜尋頻道打撈
-                            f.write(f"\n## {log_time_str} [來自 {station_origin} 的自動入庫分析]\n")
-                            f.write(f"- **發射站**: {station_origin} ({dev_type})\n")
-                            f.write(f"- **關聯音訊**: {mic_name}\n")
-                            f.write(f"- **指令**: {u_text if u_text else '預設分析'}\n")
-                            f.write(f"- **AI 報告**: {response.text}\n")
+                            f.write(f"# 航行紀錄 - {log_time_str}\n\n")
+                            f.write(f"### 📍 來源發射站：{station_origin} ({dev_type})\n")
+                            f.write(f"- **指令核心**: {u_text if u_text else '自動感測'}\n")
+                            
+                            # 寫入這幾行，日誌頻道就能自動播放音訊和顯示二姊的圖
+                            if u_img: f.write(f"- **關聯影像**: {img_ref_name}\n")
+                            if audio_bytes: f.write(f"- **關聯語音**: {mic_ref_name}\n")
+                            if u_audio: f.write(f"- **關聯音訊**: {audio_ref_name}\n")
+                            
+                            f.write(f"\n#### 🧠 AI 解析結果\n{response.text}\n")
                             f.write("\n---\n")
+                        st.success(f"✅ 日誌已寫入：log_{timestamp}.md")
                     else:
                         st.info("⚠️ 檔案已物理存檔，但 API Key 未配置。")
                 except Exception as e:
@@ -546,37 +552,67 @@ elif channel == "📜 航行日誌 (Log)":
     st.title("📜 舊日航行完整紀錄")
     st.markdown("---")
     
+    # 定位實體路徑
     CURRENT_LOG_DIR = os.path.join(DATA_ROOT, current_p_name, "logs")
     CURRENT_MEDIA_DIR = os.path.join(DATA_ROOT, current_p_name, "media")
 
     # =========================================================
-    # 🚀 核心功能：全專案大數據彙整區 (加在標題下方)
+    # 🎨 視覺觀測窗：展示二姊的畫作與素材
+    # =========================================================
+    if os.path.exists(CURRENT_MEDIA_DIR):
+        # 抓取所有圖片格式 (PNG, JPG, WEBP)
+        all_imgs = [f for f in os.listdir(CURRENT_MEDIA_DIR) if f.lower().endswith(('.png', '.jpg', '.jpeg', '.webp'))]
+        if all_imgs:
+            with st.expander("🎨 航道視覺觀測窗 (二姊的畫作庫)", expanded=True):
+                st.caption(f"目前存放於：{CURRENT_MEDIA_DIR}")
+                # 使用 columns 陣列排版，讓 19GB 主機負擔更輕
+                img_cols = st.columns(3)
+                # 顯示最近上傳的 6 張圖片
+                sorted_imgs = sorted(all_imgs, key=lambda x: os.path.getmtime(os.path.join(CURRENT_MEDIA_DIR, x)), reverse=True)
+                for idx, img_name in enumerate(sorted_imgs[:6]):
+                    with img_cols[idx % 3]:
+                        st.image(os.path.join(CURRENT_MEDIA_DIR, img_name), use_column_width=True, caption=img_name)
+    
+    # =========================================================
+    # 🚀 核心功能：全專案大數據彙整區
     # =========================================================
     st.info(f"📂 正在監控專案：{current_p_name} | 準備進行跨城市數據彙整")
     
-    if st.button("📊 生成全專案 AI 總結報告 (整合所有 MD & WAV)"):
+    if st.button("📊 生成全專案 AI 總結報告 (整合所有 MD & 素材)"):
         if not FINAL_KEY:
-            st.error("❌ 核心金鑰失效（或已外洩），請更新 API Key。")
+            st.error("❌ 核心金鑰失效，請更新 API Key。")
         else:
             with st.spinner("正在打撈台北、新竹、台南發射站數據並精煉中..."):
                 all_contents = []
-                # 1. 抓取所有 MD
+                # 1. 抓取所有開發日誌 (.md)
                 if os.path.exists(CURRENT_LOG_DIR):
                     for log_f in sorted(os.listdir(CURRENT_LOG_DIR)):
                         if log_f.endswith(".md"):
                             with open(os.path.join(CURRENT_LOG_DIR, log_f), "r", encoding="utf-8") as f:
                                 all_contents.append(f"### 文件: {log_f}\n{f.read()}")
                 
-                # 2. 抓取所有媒體清單
+                # 2. 統計媒體庫狀況 (語音與圖片)
                 if os.path.exists(CURRENT_MEDIA_DIR):
-                    waves = [f for f in os.listdir(CURRENT_MEDIA_DIR) if f.endswith(".wav")]
-                    all_contents.append(f"\n### 已入庫語音清單\n" + "\n".join(waves))
+                    media_files = os.listdir(CURRENT_MEDIA_DIR)
+                    waves = [f for f in media_files if f.endswith(".wav")]
+                    imgs = [f for f in media_files if f.lower().endswith(('.png', '.jpg', '.webp'))]
+                    all_contents.append(f"\n### 媒體庫統計\n已入庫語音: {len(waves)} 筆\n已入庫二姊畫作/素材: {len(imgs)} 筆")
 
                 full_context = "\n\n".join(all_contents)
                 
                 # 3. AI 彙整邏輯
                 model = genai.GenerativeModel(AI_MODEL)
-                summary_prompt = f"你是一位資深遊戲開發助手。請根據以下所有開發日誌與媒體紀錄，整理出一份專業的《{current_p_name}》專案總結 PDF 報告內容。需包含：1.整體開發進度 2.各城市發射站的靈感彙整 3.待辦清單。請直接以結構化文字輸出內容。\n\n數據：\n{full_context}"
+                summary_prompt = f"""
+                你是一位資深遊戲開發助手。請根據以下開發日誌與媒體紀錄，為《{current_p_name}》整理一份專業報告。
+                需包含：
+                1. 整體開發進度（特別是 Godot 腳本進展）
+                2. 視覺素材彙整（請提及二姊上傳的畫作數量與最新素材）
+                3. 各城市發射站的靈感與待辦事項清單。
+                請直接以結構化文字輸出內容。
+                
+                數據源：
+                {full_context}
+                """
                 
                 try:
                     response = model.generate_content(summary_prompt)
@@ -588,8 +624,10 @@ elif channel == "📜 航行日誌 (Log)":
                     html_style = f"""
                     <html><body style="font-family: sans-serif; padding: 30px;">
                         <h1 style="color: #d4af37; border-bottom: 2px solid #d4af37;">餘燼航路：全域開發報告</h1>
-                        <div style="background: #fdfaf3; padding: 20px; border: 1px solid #ddd;">{ai_report.replace('\n', '<br>')}</div>
-                        <p style="font-size: 10px; color: #999; margin-top: 20px;">由 小白龍 19GB 核心主機生成</p>
+                        <div style="background: #fdfaf3; padding: 20px; border: 1px solid #ddd; line-height: 1.6;">
+                            {ai_report.replace('\n', '<br>')}
+                        </div>
+                        <p style="font-size: 10px; color: #999; margin-top: 20px;">由 小白龍 19GB 核心主機生成 | 座標：屏東九如發射站</p>
                     </body></html>
                     """
                     HTML(string=html_style).write_pdf(pdf_filename)
@@ -599,18 +637,20 @@ elif channel == "📜 航行日誌 (Log)":
                 except Exception as e:
                     st.error(f"❌ 彙整失敗: {str(e)}")
 
-    st.markdown("---") # 分隔線，下方開始顯示個別日誌清單
+    st.markdown("---") 
 
     # =========================================================
-    # 2. 建立時間線 (原本的邏輯)
+    # 2. 建立時間線 (Log 與 Audio 混合排列)
     # =========================================================
     all_logs = [f for f in os.listdir(CURRENT_LOG_DIR) if f.endswith(".md")] if os.path.exists(CURRENT_LOG_DIR) else []
     all_waves = [f for f in os.listdir(CURRENT_MEDIA_DIR) if f.startswith("mic_") and f.endswith(".wav")] if os.path.exists(CURRENT_MEDIA_DIR) else []
 
     timeline_items = []
+    # 蒐集所有日誌
     for log in all_logs:
         timeline_items.append({"type": "log", "name": log, "time": os.path.getmtime(os.path.join(CURRENT_LOG_DIR, log))})
 
+    # 判斷語音是否已被歸檔
     log_contents = ""
     for log in all_logs:
         with open(os.path.join(CURRENT_LOG_DIR, log), "r", encoding="utf-8") as f:
@@ -620,10 +660,11 @@ elif channel == "📜 航行日誌 (Log)":
         if wav not in log_contents:
             timeline_items.append({"type": "audio", "name": wav, "time": os.path.getmtime(os.path.join(CURRENT_MEDIA_DIR, wav))})
 
+    # 依照時間排序 (最新在前)
     timeline_items.sort(key=lambda x: x["time"], reverse=True)
 
     if not timeline_items:
-        st.info("📂 目前航道空無一物。")
+        st.info("📂 目前航道空無一物，等待新的紀錄刻痕。")
     else:
         for item in timeline_items:
             if item["type"] == "log":
@@ -632,13 +673,20 @@ elif channel == "📜 航行日誌 (Log)":
                     content = f.read()
                 
                 with st.expander(f"📄 日誌: {log_file}"):
+                    # 🎧 語音自動顯像
                     import re
-                    # ⚡ 修正後的正則表達式：支援帶地點標籤的檔名 (例如 mic_台北站_0512_155149.wav)
                     found_wav = re.search(r'mic_.*?_\d{4}_\d{6}\.wav|mic_\d{4}_\d{6}\.wav', content)
                     if found_wav:
                         wav_path = os.path.join(CURRENT_MEDIA_DIR, found_wav.group(0))
                         if os.path.exists(wav_path):
                             st.audio(wav_path)
+                    
+                    # 📸 圖片智慧顯像補丁：若日誌內提到圖片檔名，直接呈現
+                    if 'all_imgs' in locals():
+                        for img_name in all_imgs:
+                            if img_name in content:
+                                st.image(os.path.join(CURRENT_MEDIA_DIR, img_name), caption=f"🎨 引用素材：{img_name}")
+                    
                     st.markdown(content)
             
             else:
