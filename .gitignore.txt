@@ -1,5 +1,5 @@
 # 排除所有 JSON 設定與數據
-*.json
+data/all_projects/*.json
 data/
 logs/
 media/
