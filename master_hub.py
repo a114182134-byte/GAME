@@ -234,35 +234,90 @@ elif channel == "📖 答案之書":
     st.caption("※ 答案之書會自動分析你的開發日誌，將你過去的思考轉化為未來的指引。")
 elif channel == "🛠️ 管理部署":
     st.title("🛠️ 專案管理與同步")
+    st.markdown("---")
     
+    # 1. 燃料庫 (.env) 配置：直接物理寫入 Token 與 Key
     with st.expander("🔑 燃料庫 (.env) 配置"):
-        new_ai = st.text_input("ai_key", value=os.getenv("ai_key", ""), type="password")
-        new_gh = st.text_input("github_token", value=os.getenv("github_token", ""), type="password")
-        if st.button("🚀 物理寫入"):
+        st.info("若顯示『未配置 github_token』，請在此輸入並點擊物理寫入。")
+        # 讀取當前環境變數
+        curr_ai = os.getenv("ai_key", "")
+        curr_gh = os.getenv("github_token", "")
+        
+        new_ai = st.text_input("填入 ai_key", value=curr_ai, type="password")
+        new_gh = st.text_input("填入 github_token", value=curr_gh, type="password")
+        
+        if st.button("🚀 物理寫入 .env 燃料庫"):
+            # 直接寫入檔案以確保持久化
             with open(BASE_PATH / ".env", "w", encoding="utf-8") as f:
                 f.write(f"ai_key={new_ai}\ngithub_token={new_gh}\n")
+            # 同步更新當前運行的環境變數，避免重啟
             os.environ["ai_key"] = new_ai
             os.environ["github_token"] = new_gh
-            st.success("燃料庫已更新")
+            st.success("✅ 燃料庫已重新注入，環境變數已即時刷新！")
 
-    with st.expander("📝 專案修改與刪除"):
-        # 修改邏輯
-        p_path = st.text_input("Godot 路徑", config.get("local_script_path", ""))
-        if st.button("💾 儲存路徑"):
-            PROJECTS[current_p_name]["local_script_path"] = p_path
-            save_config(PROJECTS)
+    # 2. 專案修改、新增與刪除
+    with st.expander("📝 專案架構管理"):
+        st.subheader(f"當前專案：{current_p_name}")
         
-        # 刪除邏輯
-        if st.button("🗑️ 刪除此專案"):
-            if len(PROJECTS) > 1:
-                del PROJECTS[current_p_name]
+        # 修改當前專案路徑
+        new_path = st.text_input("Godot 腳本資料夾路徑", config.get("local_script_path", ""))
+        new_prompt = st.text_area("AI 架構師公約 (System Prompt)", config.get("prompt", ""))
+        
+        if st.button("💾 儲存專案修改"):
+            PROJECTS[current_p_name]["local_script_path"] = new_path
+            PROJECTS[current_p_name]["prompt"] = new_prompt
+            save_config(PROJECTS)
+            st.success("專案設定已同步至 projects_config.json")
+
+        st.divider()
+        
+        # 新增專案
+        new_p_name = st.text_input("➕ 建立新專案名稱")
+        if st.button("🏗️ 啟動新專案架構"):
+            if new_p_name and new_p_name not in PROJECTS:
+                PROJECTS[new_p_name] = {
+                    "theme_color": "#D4AF37", 
+                    "bg_color": "#1A1A1A", 
+                    "prompt": "你是架構師", 
+                    "local_script_path": "", 
+                    "keys_list": []
+                }
                 save_config(PROJECTS)
                 st.rerun()
+        
+        # 刪除專案 (危險區)
+        st.divider()
+        if st.button("🗑️ 刪除當前專案 (慎用)"):
+            if len(PROJECTS) > 1:
+                # 移除配置與實體資料夾
+                del PROJECTS[current_p_name]
+                save_config(PROJECTS)
+                shutil.rmtree(os.path.join(DATA_ROOT, current_p_name), ignore_errors=True)
+                st.warning(f"已物理刪除專案：{current_p_name}")
+                st.rerun()
+            else:
+                st.error("至少需保留一個核心專案。")
 
     st.divider()
-    st.subheader("🚀 雲端同步")
-    c_msg = st.text_input("Commit Message", value="Update " + datetime.datetime.now().strftime("%m%d"))
-    if st.button("🔥 啟動同步"):
-        success, msg = secure_auto_push(c_msg)
-        if success: st.success(msg)
-        else: st.error(msg)
+    
+    # 3. 雲端進化同步 (Git Push)
+    st.subheader("🚀 雲端進化同步 (Git Push)")
+    
+    # 檢查 Token 狀態
+    if not os.getenv("github_token"):
+        st.error("⚠️ 偵測不到 GitHub Token，同步功能已鎖定。")
+    
+    commit_msg = st.text_input("進化紀錄訊息 (Commit Message)", 
+                             value=f"v{datetime.datetime.now().strftime('%m%d')} 小白龍架構進化")
+    
+    if st.button("🔥 啟動全域同步"):
+        if not os.getenv("github_token"):
+            st.error("請先在上方寫入 github_token")
+        else:
+            with st.spinner("正在穿越虛空同步至 GitHub..."):
+                # 執行自癒型同步函數
+                success, msg = secure_auto_push(commit_msg)
+                if success:
+                    st.success(msg)
+                else:
+                    st.error(msg)
