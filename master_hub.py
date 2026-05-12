@@ -131,20 +131,107 @@ elif channel == "📜 AI 寫腳本":
         st.code(res.text, language="gdscript")
 
 elif channel == "📂 檔案修復":
-    st.title("📂 自動修復")
-    p = config.get("local_script_path", "")
-    if p and os.path.exists(p):
-        files = [f for f in os.listdir(p) if f.endswith('.gd')]
-        sel_f = st.selectbox("選擇檔案", files)
-        if sel_f and st.button("🔥 AI 重構"):
-            st.info("執行重構中...")
-    else: st.warning("請先設定路徑")
+    st.title("📂 腳本監控與 AI 自動修復")
+    st.markdown("---")
+    
+    # 從專案配置中獲取本地 Godot 腳本路徑
+    script_path = config.get("local_script_path", "")
+    
+    if script_path and os.path.exists(script_path):
+        # 掃描資料夾內所有的 GDScript 檔案
+        files = [f for f in os.listdir(script_path) if f.endswith('.gd')]
+        
+        if not files:
+            st.warning(f"⚠️ 在路徑 `{script_path}` 中找不到任何 .gd 檔案。")
+        else:
+            # 讓架構師選擇要干涉的目標
+            selected_file = st.selectbox("🎯 選擇監控目標檔案", files)
+            file_full_path = os.path.join(script_path, selected_file)
+            
+            # 讀取並顯示當前原始碼
+            with open(file_full_path, "r", encoding="utf-8") as f:
+                current_code = f.read()
+            
+            with st.expander("📄 查看當前原始碼內容"):
+                st.code(current_code, language="gdscript")
+            
+            # 修復指令輸入區
+            st.subheader("🔥 物理重構指令")
+            fix_instruction = st.text_area("🔧 請輸入修復目標或重構需求", 
+                                         placeholder="例如：修復魚叉發射的緩衝邏輯，或優化內存佔用...")
+            
+            if st.button("🚀 執行 AI 物理重構並覆寫"):
+                if not FINAL_KEY:
+                    st.error("❌ 缺少 API Key，無法啟動 AI 大腦。")
+                elif not fix_instruction:
+                    st.warning("請輸入重構指令。")
+                else:
+                    with st.spinner("AI 正在解析並重構代碼中..."):
+                        # 呼叫 Gemini 進行代碼重寫
+                        model = genai.GenerativeModel(AI_MODEL)
+                        prompt = f"你現在是 Godot 4.x 專家。請根據以下需求重構代碼。\n需求：{fix_instruction}\n\n原始代碼：\n{current_code}"
+                        
+                        try:
+                            response = model.generate_content(prompt)
+                            # 嚴格清理 Markdown 標籤，確保寫入純代碼
+                            clean_code = response.text.replace("```gdscript", "").replace("```python", "").replace("```", "").strip()
+                            
+                            # 執行物理覆寫
+                            with open(file_full_path, "w", encoding="utf-8") as f:
+                                f.write(clean_code)
+                            
+                            st.success(f"✅ {selected_file} 物理重構成功！已完成自動覆寫。")
+                            st.balloons()
+                            
+                            # 存入開發日誌以供『答案之書』學習
+                            with open(os.path.join(LOG_DIR, "fix_history.md"), "a", encoding="utf-8") as log_f:
+                                log_f.write(f"\n## {datetime.datetime.now()} 修復檔案: {selected_file}\n- **需求**: {fix_instruction}\n")
+                        
+                        except Exception as e:
+                            st.error(f"❌ 重構失敗: {str(e)}")
+    else:
+        # 導向路徑設定介面
+        st.error(f"❌ 偵測不到路徑: `{script_path}`")
+        st.info("請前往『🛠️ 管理部署』頻道設定正確的『Godot 腳本路徑』。")
 
 elif channel == "📖 答案之書":
-    st.title("📖 答案之書")
-    if st.button("🔮 啟示"):
-        st.write(random.choice(["代碼如火，邏輯如鋼。", "鏽蝕之中，方見重生。", "保持航向，莫入虛空。"]))
-
+    st.title("📖 智慧答案之書")
+    st.markdown("---")
+    
+    # 建立啟示抽取按鈕
+    if st.button("🔮 擷取靈魂啟示"):
+        # 建立備用啟示庫（當日誌不足時使用）
+        backup_quotes = [
+            "代碼如火，邏輯如鋼。",
+            "鏽蝕之中，方見重生。",
+            "保持航向，莫入虛空。",
+            "黃銅的齒輪從不說謊。",
+            "每一次崩潰，都是進化的契機。"
+        ]
+        
+        pool = []
+        # 嘗試從該專案的日誌資料夾中讀取內容
+        if os.path.exists(LOG_DIR):
+            for root, dirs, files in os.walk(LOG_DIR):
+                for fn in files:
+                    if fn.endswith('.md'):
+                        with open(os.path.join(root, fn), "r", encoding="utf-8") as f:
+                            # 讀取非空白且長度足夠的行作為啟示
+                            lines = [l.strip() for l in f.readlines() if len(l.strip()) > 5]
+                            pool.extend(lines)
+        
+        # 決定最終顯示內容
+        if pool:
+            # 優先從你的開發歷史中抽取啟示
+            revelation = random.choice(pool)
+            st.info(f"⚓ **來自開發日誌的啟示：**\n\n{revelation}")
+        else:
+            # 日誌庫空虛時的隨機語錄
+            revelation = random.choice(backup_quotes)
+            st.success(f"✨ **架構師語錄：**\n\n{revelation}")
+            
+    st.divider()
+    st.caption("※ 答案之書會自動分析你的開發日誌，將你過去的思考轉化為未來的指引。")
 elif channel == "🛠️ 管理部署":
     st.title("🛠️ 專案管理與同步")
     
