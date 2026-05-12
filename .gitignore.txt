@@ -1,3 +1,6 @@
+# 排除所有 JSON 設定與數據
+*.json
+data/
+logs/
+media/
 .env
-__pycache__/
-*.log
