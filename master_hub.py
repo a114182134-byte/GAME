@@ -13,59 +13,92 @@ from dotenv import load_dotenv
 from pathlib import Path
 
 # ==========================================
-# 核心開發公約 v3.2.1 - 穩定性修復與自癒同步
+# 核心開發公約 v3.3.0 - 隱私防禦與路徑自癒
 # 認證：小白龍 - 核心邏輯架構師
 # ==========================================
-# 確保這些路徑與你之前的設定一致
+
+# --- 1. 物理路徑定義 (全域統一座標) ---
 DATA_ROOT = "all_projects" 
-LOG_DIR = os.path.join(DATA_ROOT, "logs")      # 物理路徑: all_projects/logs
-MEDIA_DIR = os.path.join(DATA_ROOT, "media")   # 物理路徑: all_projects/media
-
-# --- 2. 環境自癒邏輯 (就在這裡！) ---
-# 系統每次執行時，都會先跑這段，確保「物理空間」存在
-def initialize_environment():
-    # 同時建立根目錄與子目錄
-    folders_to_create = [DATA_ROOT, MEDIA_DIR, LOG_DIR]
-    
-    for folder in folders_to_create:
-        if not os.path.exists(folder):
-            os.makedirs(folder)
-            # 這會在你的 acer 筆電後台終端機顯示紀錄
-            print(f"🛠️ 物理空間已重構：{folder}")
-# 1. 環境初始化
+LOG_DIR = os.path.join(DATA_ROOT, "logs")      
+MEDIA_DIR = os.path.join(DATA_ROOT, "media")   
+CONFIG_FILE = os.path.join(DATA_ROOT, "projects_config.json")
 BASE_PATH = Path(__file__).resolve().parent
-load_dotenv(dotenv_path=BASE_PATH / ".env")
 
+# 加載環境變數
+load_dotenv(dotenv_path=BASE_PATH / ".env")
 ai_key = os.getenv("ai_key")
 github_token = os.getenv("github_token")
 
-DATA_ROOT = "all_projects"
-CONFIG_FILE = os.path.join(DATA_ROOT, "projects_config.json")
-
-# 2. 核心功能函數
+# --- 2. 環境自癒與系統初始化 ---
 def init_system():
-    if not os.path.exists(DATA_ROOT): os.makedirs(DATA_ROOT)
-    if not os.path.exists(CONFIG_FILE):
-        init = {"餘燼航路": {"theme_color": "#D4AF37", "bg_color": "#1A1A1A", "prompt": "你是架構師", "local_script_path": "", "keys_list": []}}
+    """
+    自動導航修復版：
+    1. 讀取現有 JSON。
+    2. 掃描 all_projects 資料夾下的實體子目錄。
+    3. 如果發現有資料夾不在 JSON 裡，自動將其掛載回來。
+    """
+    if not os.path.exists(DATA_ROOT): 
+        os.makedirs(DATA_ROOT)
+    
+    # --- [1] 載入現有配置 ---
+    projects_data = {}
+    if os.path.exists(CONFIG_FILE):
+        try:
+            with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+                projects_data = json.load(f)
+        except Exception as e:
+            print(f"⚠️ 讀取設定檔異常: {e}")
+
+    # --- [2] 掃描實體資料夾 ---
+    # 排除 logs, media 這些系統資料夾
+    excluded_folders = ['logs', 'media', '__pycache__', '.git']
+    
+    # 遍歷 all_projects 裡的所有資料夾
+    found_folders = [f for f in os.listdir(DATA_ROOT) 
+                     if os.path.isdir(os.path.join(DATA_ROOT, f)) and f not in excluded_folders]
+    
+    # --- [3] 比對並修復座標 ---
+    updated = False
+    for folder in found_folders:
+        if folder not in projects_data:
+            # 發現失蹤的專案資料夾，自動建立基礎座標
+            projects_data[folder] = {
+                "theme_color": "#4A90E2", # 預設藍色
+                "bg_color": "#1A1A1A",
+                "prompt": f"從實體資料夾 {folder} 自動恢復的專案",
+                "local_script_path": "",
+                "keys_list": []
+            }
+            updated = True
+            print(f"✅ 成功打撈失蹤專案：{folder}")
+
+    # --- [4] 如果 JSON 為空且沒掃描到資料夾，才建立預設「餘燼航路」 ---
+    if not projects_data:
+        projects_data = {"餘燼航路": {"theme_color": "#D4AF37", "bg_color": "#1A1A1A", "prompt": "你是架構師", "local_script_path": "", "keys_list": []}}
+        updated = True
+
+    # --- [5] 存檔 ---
+    if updated:
         with open(CONFIG_FILE, "w", encoding="utf-8") as f:
-            json.dump(init, f, indent=4, ensure_ascii=False)
-        return init
-    with open(CONFIG_FILE, "r", encoding="utf-8") as f:
-        return json.load(f)
+            json.dump(projects_data, f, indent=4, ensure_ascii=False)
+            
+    return projects_data
 
 def save_config(projects_data):
+    """保存專案配置到實體硬碟"""
     with open(CONFIG_FILE, "w", encoding="utf-8") as f:
         json.dump(projects_data, f, indent=4, ensure_ascii=False)
 
+# --- 3. 安全同步系統 (Git 保險箱) ---
 def secure_auto_push(commit_message):
     """
-    自癒型同步系統 v2.0：
-    1. 自動配置 Git 身份。
-    2. 採用 rebase 機制處理衝突，捨棄危險的 --force。
-    3. 實施動態排除清單。
+    自癒型同步系統 v3.0：
+    1. 強制排除金鑰 JSON。
+    2. 自動清理 Git 快取防止『肥回來』。
+    3. 保持媒體與日誌同步。
     """
     try:
-        # --- [1] 身份動態識別 (可改為從 .env 讀取) ---
+        # [1] 身份動態識別
         user_email = os.getenv("git_email", "zzz961011@gmail.com")
         user_name = os.getenv("git_name", "zzz961011")
         subprocess.run(["git", "config", "--global", "user.email", user_email], check=True)
@@ -75,43 +108,57 @@ def secure_auto_push(commit_message):
             subprocess.run(["git", "init"], check=True)
             subprocess.run(["git", "remote", "add", "origin", "https://github.com/a114182134-byte/GAME.git"], check=True)
 
-        # --- [2] 建立防禦壁壘 (.gitignore) ---
-        # 排除暫存檔與個人燃料庫，確保 archives 與 logs 能夠同步 
-        ignore_content = ".env\n__pycache__/\n*.pyc\n.streamlit/\n"
-        with open(BASE_PATH / ".gitignore", "w") as f: f.write(ignore_content)
+        # [2] 建立防禦壁壘 (.gitignore) - 核心修正
+        # 強制加入排除 JSON 的規則，防止金鑰上傳
+        ignore_content = [
+            ".env",
+            "__pycache__/",
+            "*.pyc",
+            ".streamlit/",
+            "*.json",               # 排除根目錄所有 JSON
+            "all_projects/*.json",   # 排除專案資料夾內的 JSON
+            "all_projects/projects_config.json" # 二重保險
+        ]
+        with open(BASE_PATH / ".gitignore", "w", encoding="utf-8") as f: 
+            f.write("\n".join(ignore_content))
+
+        # [3] 執行物理脫離 (這行能解決妳說的「肥回來」問題)
+        # 強制從 Git 的暫存區移除所有 JSON (但不刪除妳電腦的檔案)
+        subprocess.run(["git", "rm", "-r", "--cached", "*.json", "--ignore-unmatch"], capture_output=True)
+        subprocess.run(["git", "rm", "-r", "--cached", "all_projects/*.json", "--ignore-unmatch"], capture_output=True)
 
         token = os.getenv("github_token")
         if not token:
             return False, "❌ 未配置 github_token，燃料不足無法發射。"
 
-        # 構建帶有 Token 的遠端 URL
         repo_url = f"https://{token}@github.com/a114182134-byte/GAME.git"
 
-        # --- [3] 執行安全同步邏輯 ---
+        # [4] 執行安全同步
         subprocess.run(["git", "add", "."], check=True)
         
-        # 檢查是否有變更需要提交
         status = subprocess.run(["git", "status", "--porcelain"], capture_output=True, text=True).stdout
         if status:
             subprocess.run(["git", "commit", "-m", commit_message], check=True)
         
-        # [核心升級]：先嘗試拉取並重定基底 (Rebase)，而非強行覆蓋 
         st.caption("🔄 正在嘗試與遠端航道對接 (Pull Rebase)...")
         pull_res = subprocess.run(["git", "pull", repo_url, "main", "--rebase"], capture_output=True, text=True)
         
         if pull_res.returncode != 0:
-            return False, f"❌ 航道衝突！遠端有更新，請手動處理或確認衝突內容：\n{pull_res.stderr}"
+            return False, f"❌ 航道衝突！請手動處理：\n{pull_res.stderr}"
 
-        # [核心升級]：安全推送 (移除 --force) 
         push_res = subprocess.run(["git", "push", repo_url, "main"], capture_output=True, text=True)
         
         if push_res.returncode == 0:
-            return True, "✅ 航道對接成功，進化紀錄已同步至雲端。"
+            return True, "✅ 航道對接成功！日誌與媒體已送達，私密 JSON 已過濾。"
         else:
             return False, f"❌ 推送失敗：{push_res.stderr}"
 
     except Exception as e:
         return False, f"❌ 系統自癒失敗: {str(e)}"
+
+# --- 4. 啟動系統 ---
+# 確保每次執行都會抓到最新的專案狀態
+PROJECTS = init_system()
 
 # 3. UI 構建
 st.set_page_config(page_title="小白龍核心母站 v3.2.1", layout="wide", page_icon="⚓")
@@ -746,18 +793,46 @@ elif channel == "⚙️ 核心維護 (System)":
                 save_config(PROJECTS)
                 st.rerun()
         
-        # 刪除專案 (危險區)
+# 刪除專案 (危險區 - 增加雙重鎖定)
         st.divider()
-        if st.button("🗑️ 刪除當前專案 (慎用)"):
-            if len(PROJECTS) > 1:
-                # 移除配置與實體資料夾
-                del PROJECTS[current_p_name]
-                save_config(PROJECTS)
-                shutil.rmtree(os.path.join(DATA_ROOT, current_p_name), ignore_errors=True)
-                st.warning(f"已物理刪除專案：{current_p_name}")
-                st.rerun()
-            else:
-                st.error("至少需保留一個核心專案。")
+        
+        # 使用 expander 把危險功能收納起來，避免誤觸
+        with st.expander("🚨 危險區域：專案物理拆解"):
+            st.warning(f"注意：此操作將物理刪除「{current_p_name}」所有資料夾與配置，且無法復原。")
+            
+            # 認證碼輸入框
+            confirm_input = st.text_input(
+                "請輸入專案名稱以解鎖刪除按鈕：", 
+                placeholder=current_p_name,
+                help="這是在執行物理刪除前的最後安全驗證"
+            )
+
+            # 只有認證碼正確，刪除按鈕才可被點擊 (disabled 邏輯)
+            is_verified = (confirm_input == current_p_name)
+            
+            if st.button(
+                f"🔥 確認物理刪除：{current_p_name}", 
+                type="primary", 
+                disabled=not is_verified,
+                use_container_width=True
+            ):
+                if len(PROJECTS) > 1:
+                    # 1. 從配置中移除
+                    del PROJECTS[current_p_name]
+                    save_config(PROJECTS)
+                    
+                    # 2. 物理刪除實體資料夾
+                    project_dir = os.path.join(DATA_ROOT, current_p_name)
+                    if os.path.exists(project_dir):
+                        shutil.rmtree(project_dir, ignore_errors=True)
+                    
+                    st.toast(f"🚩 專案【{current_p_name}】已從磁區中徹底抹除", icon="🗑️")
+                    st.rerun()
+                else:
+                    st.error("🚨 核心協議：必須保留至少一個運作中的專案。")
+            
+            if confirm_input and not is_verified:
+                st.caption("⚠️ 認證名稱不匹配，刪除系統已鎖定。")
 
     st.divider()
     
