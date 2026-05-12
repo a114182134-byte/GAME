@@ -1,0 +1,28 @@
+{
+    "餘燼航路：鏽蝕重生": {
+        "theme_color": "#D4AF37",
+        "bg_color": "#1A1A1A",
+        "prompt": "你是《餘燼航路》顧問。風格：黃銅蒸氣、末世。核心：塔防、海上航行、魂系、資源管理。\n要判斷適不適合這個遊戲",
+        "version": "v1.3 Final",
+        "api_key": "AIzaSyCH3h_k3OoOXSTGCekrqL1rDbk2RFmJiqs",
+        "keys_list": [],
+        "local_script_path": ""
+    },
+    "萌萌大作戰": {
+        "theme_color": "#daa420",
+        "bg_color": "#0E1117",
+        "prompt": "妳是一個很會寫遊戲腳本的ai,風格溫馨，人物可愛，ai性格顧問",
+        "api_key": "AIzaSyCOA8bo2y0jINPSvUXJ34ZE5qviDOr4yyQ",
+        "keys_list": [],
+        "local_script_path": ""
+    },
+    "伊甸園終局：餘燼計畫": {
+        "theme_color": "#2a4374",
+        "bg_color": "#1A1A1A",
+        "prompt": "你是一個悲劇作家 要分析這劇情夠不夠刀人",
+        "local_script_path": "",
+        "keys_list": [
+            "AIzaSyCH3h_k3OoOXSTGCekrqL1rDbk2RFmJiqs"
+        ]
+    }
+}
