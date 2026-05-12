@@ -99,7 +99,7 @@ with st.sidebar:
         st.session_state.active_key = input_key
 
     AI_MODEL = st.selectbox("AI 模型", ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-1.5-pro"])
-    channel = st.radio("功能頻道", ["💡 媒體採集", "📜 AI 寫腳本", "📂 檔案修復", "📖 答案之書", "🛠️ 管理部署"])
+    channel = st.radio("功能頻道", ["📸 素材打撈 (Media)", "🔧 齒輪重組 (Script)", "🧪 結構修復 (Patch)", "🔮 虛空啟示 (Oracle)","📜 航行日誌 (Log)", "⚙️ 核心維護 (System)"])
 
 # 獲取當前有效 Key
 FINAL_KEY = st.session_state.get("active_key", ai_key if ai_key else input_key)
@@ -111,8 +111,8 @@ MEDIA_DIR = os.path.join(DATA_ROOT, current_p_name, "media")
 for d in [LOG_DIR, MEDIA_DIR]: 
     if not os.path.exists(d): os.makedirs(d)
 
-if channel == "💡 媒體採集":
-    st.title("💡 媒體採集與跨模態分析")
+if channel == "📸 素材打撈 (Media)":
+    st.title("📸 殘留影像與波形打撈")
     st.markdown("---")
     
     # 1. 指令輸入與麥克風組件
@@ -192,16 +192,16 @@ if channel == "💡 媒體採集":
                 except Exception as e:
                     st.error(f"❌ 跨模態解析失敗: {str(e)}")
 
-elif channel == "📜 AI 寫腳本":
-    st.title("📜 AI 自動寫腳本")
+elif channel == "🔧 齒輪重組 (Script)":
+    st.title("🔧 邏輯齒輪精密重組")
     task = st.text_area("🔧 需求描述")
     if st.button("🪄 生成"):
         model = genai.GenerativeModel(AI_MODEL, system_instruction=config["prompt"])
         res = model.generate_content(task)
         st.code(res.text, language="gdscript")
 
-elif channel == "📂 檔案修復":
-    st.title("📂 腳本監控與 AI 自動修復")
+elif channel == "🧪 結構修復 (Patch)":
+    st.title("🧪 檔案結構物理修復")
     st.markdown("---")
     
     # 從專案配置中獲取本地 Godot 腳本路徑
@@ -264,8 +264,8 @@ elif channel == "📂 檔案修復":
         st.error(f"❌ 偵測不到路徑: `{script_path}`")
         st.info("請前往『🛠️ 管理部署』頻道設定正確的『Godot 腳本路徑』。")
 
-elif channel == "📖 答案之書":
-    st.title("📖 智慧答案之書：多模態啟示")
+elif channel == "🔮 虛空啟示 (Oracle)":
+    st.title("🔮 來自虛空的隨機啟示")
     st.markdown("---")
     
     if st.button("🔮 擷取靈魂啟示"):
@@ -311,8 +311,28 @@ elif channel == "📖 答案之書":
 
     st.divider()
     st.caption("※ 答案之書會隨機連結你的開發記憶，幫助你找回《餘燼航路》的初心。")
-elif channel == "🛠️ 管理部署":
-    st.title("🛠️ 專案管理與同步")
+elif channel == "📜 航行日誌 (Log)":
+    st.title("📜 舊日航行完整紀錄")
+    st.markdown("---")
+    log_path = os.path.join(LOG_DIR, "media_log.md")
+    
+    if not os.path.exists(log_path):
+        st.info("目前尚無航行紀錄。")
+    else:
+        with open(log_path, "r", encoding="utf-8") as f:
+            log_content = f.read()
+        
+        search_query = st.text_input("🔍 搜尋歷史紀錄", "")
+        entries = log_content.split("## ")[1:] 
+        
+        for entry in reversed(entries):
+            full_entry = "## " + entry
+            if search_query.lower() in full_entry.lower():
+                with st.expander(f"📅 紀錄內容"):
+                    st.markdown(full_entry)
+
+elif channel == "⚙️ 核心維護 (System)":
+    st.title("⚙️ 核心動力室維護")
     st.markdown("---")
     
     # 1. 燃料庫 (.env) 配置：直接物理寫入 Token 與 Key
