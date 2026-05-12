@@ -15,7 +15,22 @@ from pathlib import Path
 # 核心開發公約 v3.2.1 - 穩定性修復與自癒同步
 # 認證：小白龍 - 核心邏輯架構師
 # ==========================================
+# 確保這些路徑與你之前的設定一致
+DATA_ROOT = "all_projects" 
+LOG_DIR = os.path.join(DATA_ROOT, "logs")      # 物理路徑: all_projects/logs
+MEDIA_DIR = os.path.join(DATA_ROOT, "media")   # 物理路徑: all_projects/media
 
+# --- 2. 環境自癒邏輯 (就在這裡！) ---
+# 系統每次執行時，都會先跑這段，確保「物理空間」存在
+def initialize_environment():
+    # 同時建立根目錄與子目錄
+    folders_to_create = [PROJECT_ROOT, MEDIA_DIR, LOG_DIR]
+    
+    for folder in folders_to_create:
+        if not os.path.exists(folder):
+            os.makedirs(folder)
+            # 這會在你的 acer 筆電後台終端機顯示紀錄
+            print(f"🛠️ 物理空間已重構：{folder}")
 # 1. 環境初始化
 BASE_PATH = Path(__file__).resolve().parent
 load_dotenv(dotenv_path=BASE_PATH / ".env")
@@ -115,82 +130,139 @@ if channel == "📸 素材打撈 (Media)":
     st.title("📸 殘留影像與波形打撈")
     st.markdown("---")
     
-    # 1. 指令輸入與麥克風組件
-    u_text = st.text_area("🧠 分析指令 (或用語音輸入後自動填充)", placeholder="描述需求...")
+    # 1. 指令輸入區域
+    u_text = st.text_area("🧠 分析指令 (或用語音輸入後自動填充)", placeholder="描述你的開發需求或靈感...", help="這些文字會連同媒體一起交給 AI 處理。")
     
     st.subheader("🎤 語音靈感捕捉")
-    # 使用 streamlit 自帶的錄音組件 (需安裝 streamlit-audio-recorder 或使用以下標準錄音方案)
+    # 使用錄音組件
     from audio_recorder_streamlit import audio_recorder
     audio_bytes = audio_recorder(
-        text="點擊圖示開始/停止錄音",
+        text="點擊開始/停止（自動入庫）",
         recording_color="#e74c3c",
         neutral_color="#D4AF37",
         icon_name="microphone",
         icon_size="2x",
     )
 
+   # ---------------------------------------------------------
+    # ⚡ [自動入庫監聽器] - 錄音攔截與即時回放
+    # ---------------------------------------------------------
+    if audio_bytes:
+        # 使用 session_state 防止重複寫入
+        if "last_mic_data" not in st.session_state or st.session_state.last_mic_data != audio_bytes:
+            timestamp = datetime.datetime.now().strftime('%m%d_%H%M%S')
+            mic_name = f"mic_{timestamp}.wav"
+            mic_path = os.path.join(MEDIA_DIR, mic_name)
+            
+            with open(mic_path, "wb") as f:
+                f.write(audio_bytes)
+            
+            st.session_state.last_mic_data = audio_bytes 
+            st.session_state.current_mic_path = mic_path # 記住路徑供播放
+            st.sidebar.success(f"🎙️ 聲波已入庫: {mic_name}")
+
+        # 顯示播放器：直接讀取剛存好的「物理檔案」
+        st.write("🎵 剛打撈到的聲波：")
+        st.audio(audio_bytes, format="audio/wav")
+    # ---------------------------------------------------------
+
     st.divider()
     
     # 2. 檔案上傳區
     col1, col2 = st.columns(2)
     with col1:
-        u_img = st.file_uploader("🖼️ 儲存並分析圖片", type=['png', 'jpg', 'jpeg'])
+        u_img = st.file_uploader("🖼️ 影像打撈", type=['png', 'jpg', 'jpeg'])
+        # ⚡ [自動入庫監聽器] - 圖片攔截
+        if u_img:
+            img_path = os.path.join(MEDIA_DIR, u_img.name)
+            if not os.path.exists(img_path):
+                from PIL import Image
+                img = Image.open(u_img)
+                img.save(img_path)
+                st.sidebar.success(f"🖼️ 影像已物理入庫: {u_img.name}")
+
     with col2:
-        u_audio = st.file_uploader("🎵 上傳現有音訊檔", type=['mp3', 'wav', 'ogg'])
+        u_audio = st.file_uploader("🎵 音訊打撈", type=['mp3', 'wav', 'ogg', 'm4a'])
+        # ⚡ [自動入庫監聽器] - 音訊檔案攔截
+        if u_audio:
+            a_path = os.path.join(MEDIA_DIR, u_audio.name)
+            if not os.path.exists(a_path):
+                with open(a_path, "wb") as f:
+                    f.write(u_audio.getbuffer())
+                st.sidebar.success(f"🎵 音訊已物理入庫: {u_audio.name}")
+
+    st.markdown("---")
     
-    # 3. 執行執行與儲存邏輯
-    if st.button("🚀 啟動跨模態採集"):
+    # 3. 執行 AI 分析按鈕 (同步時間座標版)
+    if st.button("🚀 啟動跨模態解析 (AI 思考)"):
         if not (u_img or u_audio or u_text or audio_bytes):
-            st.warning("請提供素材或進行錄音。")
+            st.warning("📡 偵測不到感測器數據，請先提供素材或錄音。")
         else:
             with st.spinner("核心引擎處理媒體中..."):
+                # ⚡ 核心修正：固定單一時間點，確保所有檔案與日誌「秒數對齊」
+                now = datetime.datetime.now()
+                timestamp = now.strftime('%m%d_%H%M%S') # 用於檔名: 0512_154106
+                log_time_str = now.strftime('%Y-%m-%d %H:%M:%S') # 用於日誌標題
+                
                 model = genai.GenerativeModel(AI_MODEL)
                 content_payload = []
-                timestamp = datetime.datetime.now().strftime('%m%d_%H%M%S')
+                mic_name = "無"
                 
-                # --- 處理麥克風錄音 ---
+                # --- 處理麥克風錄音並同步存檔 ---
                 if audio_bytes:
                     mic_name = f"mic_{timestamp}.wav"
                     mic_path = os.path.join(MEDIA_DIR, mic_name)
                     with open(mic_path, "wb") as f:
                         f.write(audio_bytes)
                     content_payload.append({"mime_type": "audio/wav", "data": audio_bytes})
-                    st.toast(f"🎙️ 麥克風錄音已入庫: {mic_name}")
-
-                # --- 處理圖片 ---
+                
+                # --- 處理上傳圖片 ---
                 if u_img:
+                    from PIL import Image
                     img = Image.open(u_img)
-                    img_name = f"img_{timestamp}.png"
-                    img_path = os.path.join(MEDIA_DIR, img_name)
-                    img.save(img_path)
                     content_payload.append(img)
-                    st.toast(f"🖼️ 圖片已入庫: {img_name}")
-
+                    # 順便物理存檔
+                    img.save(os.path.join(MEDIA_DIR, u_img.name))
+                
                 # --- 處理上傳音訊 ---
                 if u_audio:
                     a_data = u_audio.read()
-                    a_path = os.path.join(MEDIA_DIR, u_audio.name)
-                    with open(a_path, "wb") as f: f.write(a_data)
                     content_payload.append({"mime_type": u_audio.type, "data": a_data})
-                    st.toast(f"🎵 音訊檔已入庫: {u_audio.name}")
+                    with open(os.path.join(MEDIA_DIR, u_audio.name), "wb") as f:
+                        f.write(a_data)
 
-                # 組合最終指令
-                final_prompt = u_text if u_text else "請分析以上媒體內容。如果是語音錄音，請先將其轉錄為文字並總結重點。"
+                # 組合指令
+                final_prompt = u_text if u_text else "請分析以上媒體內容。如果是語音，請轉錄為文字。如果是圖片，請描述視覺細節並給出開發建議。"
                 content_payload.insert(0, final_prompt)
 
                 try:
                     if FINAL_KEY:
                         response = model.generate_content(content_payload)
                         st.markdown("### 📝 AI 綜合分析報告")
+                        
+                        # 即時回放，解決「播不了」的問題
+                        if audio_bytes:
+                            st.write(f"🎙️ **語音已存入：{mic_name}**")
+                            st.audio(audio_bytes, format="audio/wav")
+                        elif u_audio:
+                            st.write(f"🎵 **回放上傳音軌：{u_audio.name}**")
+                            st.audio(u_audio, format=u_audio.type)
+                        
                         st.write(response.text)
                         
-                        # 存入日誌，供『答案之書』未來調用
-                        with open(os.path.join(LOG_DIR, "media_log.md"), "a", encoding="utf-8") as f:
-                            f.write(f"\n## {datetime.datetime.now()} [多模態採集]\n- **分析內容**: {response.text}\n")
+                        # --- 同步寫入航行日誌 (確保格式能被日誌頻道精確打撈) ---
+                        log_file = os.path.join(LOG_DIR, "media_log.md")
+                        with open(log_file, "a", encoding="utf-8") as f:
+                            # 這裡的格式必須與日誌頻道的 re.search 正則表達式匹配
+                            f.write(f"\n## {log_time_str} [自動入庫分析]\n")
+                            f.write(f"- **關聯音訊**: {mic_name}\n")
+                            f.write(f"- **指令**: {u_text if u_text else '預設分析'}\n")
+                            f.write(f"- **AI 報告**: {response.text}\n")
+                            f.write("\n---\n") # 加入分隔線，視覺更清晰
                     else:
-                        st.info("⚠️ 檔案已物理存檔至 media 資料夾，但未配置 API Key 進行分析。")
+                        st.info("⚠️ 檔案已安全物理存檔，但由於 API Key 未配置，無法啟動虛空解析。")
                 except Exception as e:
-                    st.error(f"❌ 跨模態解析失敗: {str(e)}")
+                    st.error(f"❌ 核心解析引擎異常: {str(e)}")
 
 elif channel == "🔧 齒輪重組 (Script)":
     st.title("🔧 邏輯齒輪精密重組")
@@ -314,23 +386,64 @@ elif channel == "🔮 虛空啟示 (Oracle)":
 elif channel == "📜 航行日誌 (Log)":
     st.title("📜 舊日航行完整紀錄")
     st.markdown("---")
-    log_path = os.path.join(LOG_DIR, "media_log.md")
     
-    if not os.path.exists(log_path):
-        st.info("目前尚無航行紀錄。")
-    else:
-        with open(log_path, "r", encoding="utf-8") as f:
-            log_content = f.read()
-        
-        search_query = st.text_input("🔍 搜尋歷史紀錄", "")
-        entries = log_content.split("## ")[1:] 
-        
-        for entry in reversed(entries):
-            full_entry = "## " + entry
-            if search_query.lower() in full_entry.lower():
-                with st.expander(f"📅 紀錄內容"):
-                    st.markdown(full_entry)
+    CURRENT_LOG_DIR = os.path.join(DATA_ROOT, current_p_name, "logs")
+    CURRENT_MEDIA_DIR = os.path.join(DATA_ROOT, current_p_name, "media")
 
+    # 1. 抓取所有素材清單
+    all_logs = [f for f in os.listdir(CURRENT_LOG_DIR) if f.endswith(".md")] if os.path.exists(CURRENT_LOG_DIR) else []
+    all_waves = [f for f in os.listdir(CURRENT_MEDIA_DIR) if f.startswith("mic_") and f.endswith(".wav")] if os.path.exists(CURRENT_MEDIA_DIR) else []
+
+    # 2. 建立一個「時間線」清單，將日誌與孤立錄音檔合併
+    # 我們會提取檔名中的時間戳記來排序
+    timeline_items = []
+
+    # 加入日誌檔
+    for log in all_logs:
+        timeline_items.append({"type": "log", "name": log, "time": os.path.getmtime(os.path.join(CURRENT_LOG_DIR, log))})
+
+    # 加入錄音檔 (檢查是否已經被日誌關聯，若無則作為「孤立錄音」顯示)
+    log_contents = ""
+    for log in all_logs:
+        with open(os.path.join(CURRENT_LOG_DIR, log), "r", encoding="utf-8") as f:
+            log_contents += f.read()
+
+    for wav in all_waves:
+        # 如果這個 wav 檔名沒有出現在任何日誌內容中，它就是「孤立錄音」
+        if wav not in log_contents:
+            timeline_items.append({"type": "audio", "name": wav, "time": os.path.getmtime(os.path.join(CURRENT_MEDIA_DIR, wav))})
+
+    # 依時間排序 (最新在上)
+    timeline_items.sort(key=lambda x: x["time"], reverse=True)
+
+    if not timeline_items:
+        st.info("📂 目前航道空無一物，請先去『素材打撈』留下紀錄。")
+    else:
+        for item in timeline_items:
+            if item["type"] == "log":
+                # --- 顯示日誌與其關聯音訊 ---
+                log_file = item["name"]
+                with open(os.path.join(CURRENT_LOG_DIR, log_file), "r", encoding="utf-8") as f:
+                    content = f.read()
+                
+                with st.expander(f"📄 日誌: {log_file}"):
+                    import re
+                    # 搜尋關聯音訊
+                    found_wav = re.search(r'mic_\d{4}_\d{6}\.wav', content)
+                    if found_wav:
+                        wav_path = os.path.join(CURRENT_MEDIA_DIR, found_wav.group(0))
+                        if os.path.exists(wav_path):
+                            st.audio(wav_path)
+                    st.markdown(content)
+            
+            else:
+                # --- 顯示孤立錄音 (沒有 MD 也能聽) ---
+                wav_file = item["name"]
+                with st.expander(f"🎙️ 殘留聲波: {wav_file} (未歸檔)"):
+                    st.write("📡 這是一段尚未撰寫日誌的原始錄音：")
+                    st.audio(os.path.join(CURRENT_MEDIA_DIR, wav_file))
+                    if st.button(f"📝 補寫日誌", key=wav_file):
+                        st.info("功能開發中：未來可在此直接補上對這段錄音的分析內容。")
 elif channel == "⚙️ 核心維護 (System)":
     st.title("⚙️ 核心動力室維護")
     st.markdown("---")
