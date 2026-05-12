@@ -1,4 +1,8 @@
-import json
+
+## 2026-05-12 20:17:43 [來自 總部 (acer) 的自動入庫分析]
+- **發射站**: 總部 (acer) (核心主機)
+- **關聯音訊**: 無
+- **指令**: import json
 import streamlit as st
 import os
 import requests
@@ -25,7 +29,7 @@ MEDIA_DIR = os.path.join(DATA_ROOT, "media")   # 物理路徑: all_projects/medi
 # 系統每次執行時，都會先跑這段，確保「物理空間」存在
 def initialize_environment():
     # 同時建立根目錄與子目錄
-    folders_to_create = [DATA_ROOT, MEDIA_DIR, LOG_DIR]
+    folders_to_create = [PROJECT_ROOT, MEDIA_DIR, LOG_DIR]
     
     for folder in folders_to_create:
         if not os.path.exists(folder):
@@ -59,147 +63,74 @@ def save_config(projects_data):
 
 def secure_auto_push(commit_message):
     """
-    自癒型同步系統 v2.0：
-    1. 自動配置 Git 身份。
-    2. 採用 rebase 機制處理衝突，捨棄危險的 --force。
-    3. 實施動態排除清單。
+    自癒同步系統：自動配置 Git 身份並處理 Status 128 錯誤
     """
     try:
-        # --- [1] 身份動態識別 (可改為從 .env 讀取) ---
-        user_email = os.getenv("git_email", "zzz961011@gmail.com")
-        user_name = os.getenv("git_name", "zzz961011")
-        subprocess.run(["git", "config", "--global", "user.email", user_email], check=True)
-        subprocess.run(["git", "config", "--global", "user.name", user_name], check=True)
+        # 自動配置身份
+        subprocess.run(["git", "config", "--global", "user.email", "zzz961011@gmail.com"], check=True)
+        subprocess.run(["git", "config", "--global", "user.name", "zzz961011"], check=True)
 
         if not os.path.exists(BASE_PATH / ".git"):
             subprocess.run(["git", "init"], check=True)
             subprocess.run(["git", "remote", "add", "origin", "https://github.com/a114182134-byte/GAME.git"], check=True)
 
-        # --- [2] 建立防禦壁壘 (.gitignore) ---
-        # 排除暫存檔與個人燃料庫，確保 archives 與 logs 能夠同步 
-        ignore_content = ".env\n__pycache__/\n*.pyc\n.streamlit/\n"
+        # 維護排除清單
+        ignore_content = ".env\n__pycache__/\n*.json\nall_projects/media/\nall_projects/logs/"
         with open(BASE_PATH / ".gitignore", "w") as f: f.write(ignore_content)
 
-        token = os.getenv("github_token")
-        if not token:
-            return False, "❌ 未配置 github_token，燃料不足無法發射。"
+        if not os.getenv("github_token"):
+            return False, "❌ 未配置 github_token"
 
-        # 構建帶有 Token 的遠端 URL
-        repo_url = f"https://{token}@github.com/a114182134-byte/GAME.git"
-
-        # --- [3] 執行安全同步邏輯 ---
         subprocess.run(["git", "add", "."], check=True)
         
-        # 檢查是否有變更需要提交
+        # 檢查變更
         status = subprocess.run(["git", "status", "--porcelain"], capture_output=True, text=True).stdout
-        if status:
-            subprocess.run(["git", "commit", "-m", commit_message], check=True)
-        
-        # [核心升級]：先嘗試拉取並重定基底 (Rebase)，而非強行覆蓋 
-        st.caption("🔄 正在嘗試與遠端航道對接 (Pull Rebase)...")
-        pull_res = subprocess.run(["git", "pull", repo_url, "main", "--rebase"], capture_output=True, text=True)
-        
-        if pull_res.returncode != 0:
-            return False, f"❌ 航道衝突！遠端有更新，請手動處理或確認衝突內容：\n{pull_res.stderr}"
+        if not status:
+            return True, "✨ 雲端已是最新狀態。"
 
-        # [核心升級]：安全推送 (移除 --force) 
-        push_res = subprocess.run(["git", "push", repo_url, "main"], capture_output=True, text=True)
+        subprocess.run(["git", "commit", "-m", commit_message], check=True)
         
-        if push_res.returncode == 0:
-            return True, "✅ 航道對接成功，進化紀錄已同步至雲端。"
-        else:
-            return False, f"❌ 推送失敗：{push_res.stderr}"
-
+        token = os.getenv("github_token")
+        repo_url = f"https://{token}@github.com/a114182134-byte/GAME.git"
+        subprocess.run(["git", "push", repo_url, "main", "--force"], check=True)
+        return True, "✅ 進化同步成功！"
     except Exception as e:
-        return False, f"❌ 系統自癒失敗: {str(e)}"
+        return False, f"❌ 同步失敗: {str(e)}"
 
 # 3. UI 構建
 st.set_page_config(page_title="小白龍核心母站 v3.2.1", layout="wide", page_icon="⚓")
 PROJECTS = init_system()
 
-# --- [側邊欄：核心中控台] ---
 with st.sidebar:
     st.title("⚙️ 核心中控台")
-    
-    # 1. 優先獲取專案名稱
     current_p_name = st.selectbox("核心專案切換", list(PROJECTS.keys()))
     config = PROJECTS[current_p_name]
     
     st.divider()
-    
-    # 2. 金鑰管理邏輯
     st.subheader("🔑 金鑰管理")
     saved_keys = config.get("keys_list", [])
     sel_key = st.selectbox("記憶清單", ["手動輸入"] + saved_keys)
     input_key = st.text_input("API Key", value="" if sel_key == "手動輸入" else sel_key, type="password")
     
     if st.button("🔐 記憶鎖定"):
-        if input_key:
-            # ✨ 核心自癒：點擊瞬間立即配置，確保後續頻道調用不中斷
-            try:
-                genai.configure(api_key=input_key)
-                st.session_state.active_key = input_key
-                
-                if input_key not in saved_keys:
-                    PROJECTS[current_p_name].setdefault("keys_list", []).append(input_key)
-                    save_config(PROJECTS)
-                
-                st.success("✅ Gemini 2.5 Flash 引擎燃料注入成功")
-            except Exception as e:
-                st.error(f"❌ 引擎初始化失敗：{str(e)}")
+        if input_key and input_key not in saved_keys:
+            PROJECTS[current_p_name].setdefault("keys_list", []).append(input_key)
+            save_config(PROJECTS)
+        st.session_state.active_key = input_key
 
-    # 3. 指定真實 2.5 Flash 引擎
-    # 3. 引擎規格與自動對接
-    st.divider()
-    st.subheader("🤖 引擎規格")
-    
-    # ✨ 這裡的清單文字必須與下方 model_map 的 Key 完全一模一樣
-    AI_MODEL_DISPLAY = st.selectbox("核心版本", [
-        "Gemini 2.5 Flash ", 
-        "Gemini 2.0 Flash ", 
-        "Gemini 3.1 Flash "
-    ])
-    
-    # ✨ 建立精準映射，避免 KeyError
-    # ✨ 根據 2026 掃描報告精確對接
-    model_map = {
-        "Gemini 2.5 Flash ": "models/gemini-2.5-flash", 
-        "Gemini 2.0 Flash ": "models/gemini-2.0-flash", 
-        "Gemini 3.1 Flash ": "models/gemini-3.1-flash-lite"
-    }
-    
-    # 從字典獲取對應的 API 字串
-    AI_MODEL = model_map[AI_MODEL_DISPLAY]
-    
-    # 從字典獲取對應的 API 字串
-    AI_MODEL = model_map[AI_MODEL_DISPLAY]
-    
-    channel = st.radio("功能頻道", [
-        "📸 素材打撈 (Media)", "🔧 齒輪重組 (Script)", 
-        "🧪 結構修復 (Patch)", "🔮 虛空啟示 (Oracle)",
-        "📜 航行日誌 (Log)", "📜 航道啟示錄 (Oracle's Compass)",
-        "⚙️ 核心維護 (System)"
-    ])
-
-# ==========================================
-# 核心路徑動態定義 (解決 NameError 的關鍵)
-# ==========================================
+    AI_MODEL = st.selectbox("AI 模型", ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-1.5-pro"])
+    channel = st.radio("功能頻道", ["📸 素材打撈 (Media)", "🔧 齒輪重組 (Script)", "🧪 結構修復 (Patch)", "🔮 虛空啟示 (Oracle)","📜 航行日誌 (Log)", "📜 航道啟示錄 (Oracle's Compass)","⚙️ 核心維護 (System)"])
 
 # 獲取當前有效 Key
-FINAL_KEY = st.session_state.get("active_key", input_key)
-if FINAL_KEY: 
-    genai.configure(api_key=FINAL_KEY)
+FINAL_KEY = st.session_state.get("active_key", ai_key if ai_key else input_key)
+if FINAL_KEY: genai.configure(api_key=FINAL_KEY)
 
-# ✨ 這裡才開始定義路徑，因為此時 current_p_name 絕對有值
+# 建立資源目錄
 LOG_DIR = os.path.join(DATA_ROOT, current_p_name, "logs")
 MEDIA_DIR = os.path.join(DATA_ROOT, current_p_name, "media")
-ARCHIVE_DIR = os.path.join(DATA_ROOT, current_p_name, "archives") # 🏛️ 封存圖書館路徑
+for d in [LOG_DIR, MEDIA_DIR]: 
+    if not os.path.exists(d): os.makedirs(d)
 
-# 物理空間自癒建立
-for d in [LOG_DIR, MEDIA_DIR, ARCHIVE_DIR]: 
-    if not os.path.exists(d): 
-        os.makedirs(d)
-        print(f"🛠️ 物理空間已重構：{d}")
 if channel == "📸 素材打撈 (Media)":
     st.title("📸 殘留影像與波形打撈")
     st.markdown("---")
@@ -734,41 +665,6 @@ elif channel == "⚙️ 核心維護 (System)":
                     st.success(msg)
                 else:
                     st.error(msg)
-                    # 4. 🛰️ 虛空定標：模型可用性診斷 (解決 404 問題)
-    st.divider()
-    st.subheader("🛰️ 虛空定標診斷")
-    st.caption("當出現 404 錯誤時，請啟動此雷達掃描當前 API Key 支援的精確模型名稱。")
-    
-    if st.button("🔍 啟動全域模型掃描"):
-        # 確保使用當前鎖定的金鑰
-        ACTIVE_KEY = st.session_state.get("active_key", os.getenv("ai_key"))
-        
-        if not ACTIVE_KEY:
-            st.error("❌ 未偵測到有效金鑰，請先在側邊欄鎖定或在 .env 寫入。")
-        else:
-            try:
-                with st.spinner("正在掃描虛空可用模型..."):
-                    genai.configure(api_key=ACTIVE_KEY)
-                    models = genai.list_models()
-                    
-                    # 篩選出支援生成內容的模型
-                    available_models = [
-                        m.name for m in models 
-                        if 'generateContent' in m.supported_generation_methods
-                    ]
-                    
-                    if available_models:
-                        st.success(f"✅ 掃描完成！發現 {len(available_models)} 個可用航道：")
-                        for m in available_models:
-                            # 用 code 格式方便妳直接複製
-                            st.code(m)
-                        
-                        st.info("💡 提示：請複製清單中的名稱（包含 models/ 前綴），更新至 model_map 中。")
-                    else:
-                        st.warning("⚠️ 掃描完成，但此金鑰似乎不具備任何內容生成權限。")
-            except Exception as e:
-                st.error(f"❌ 掃描程序崩潰：{str(e)}")
-                st.info("💡 這通常代表金鑰無效或網路環境（九如節點）連結不穩。")
 elif channel == "📜 航道啟示錄 (Oracle's Compass)":
     st.title("📜 航道啟示錄 (Oracle's Compass)")
     st.caption("⚓ 當妳在迷霧中失去方向，請轉動此羅盤，聽取虛空的殘響。")
@@ -777,21 +673,18 @@ elif channel == "📜 航道啟示錄 (Oracle's Compass)":
     # 1. 虛空打撈：獲取全域腳本與日誌碎片
     CURRENT_LOG_DIR = os.path.join(DATA_ROOT, current_p_name, "logs")
     CURRENT_MEDIA_DIR = os.path.join(DATA_ROOT, current_p_name, "media")
-    ARCHIVE_DIR = os.path.join(DATA_ROOT, current_p_name, "archives") 
-    
-    # 物理空間自癒
-    if not os.path.exists(ARCHIVE_DIR): os.makedirs(ARCHIVE_DIR)
-
     script_path = config.get("local_script_path", "")
+    
     knowledge_pool = []
     
-    # 打撈日誌與代碼邏輯 (保持原本優良設計)
+    # 打撈日誌
     if os.path.exists(CURRENT_LOG_DIR):
         for f in os.listdir(CURRENT_LOG_DIR):
             if f.endswith(".md"):
                 with open(os.path.join(CURRENT_LOG_DIR, f), "r", encoding="utf-8") as file:
                     knowledge_pool.extend([line.strip() for line in file.readlines() if len(line.strip()) > 15])
     
+    # 打撈代碼
     if script_path and os.path.exists(script_path):
         for f in os.listdir(script_path):
             if f.endswith(".gd"):
@@ -800,63 +693,44 @@ elif channel == "📜 航道啟示錄 (Oracle's Compass)":
 
     # 2. 儀式區域
     st.subheader("💡 請求今日的開發啟示")
-    user_question = st.text_input("在心中默念妳的問題...", placeholder="例如：這段複雜的羅格賴加邏輯該如何收尾？")
+    user_question = st.text_input("在心中默念妳的問題，或輸入在此...", placeholder="例如：這段複雜的羅格賴加邏輯該如何收尾？")
 
     if st.button("🎡 撥動命運羅盤"):
         if not knowledge_pool:
-            st.warning("📜 目前知識池是空的。")
+            st.warning("📜 目前知識池是空的，請先去『素材打撈』或編寫腳本。")
         else:
+            # 隨機挑選一個碎片
             fragment = random.choice(knowledge_pool)
+            
             with st.spinner("🚢 正在迷霧中打撈啟示..."):
+                model = genai.GenerativeModel(AI_MODEL)
+                oracle_prompt = f"""
+                你是《餘燼航路》的古老導靈。使用者(架構師)正處於困惑中。
+                請根據這段打撈出的內容，給予一段充滿哲理、黃銅蒸氣與末世感的「答案之書」式指引。
+                
+                [打撈碎片]: {fragment}
+                [使用者疑問]: {user_question}
+                
+                要求：
+                1. 語氣冷峻但具備指引性。
+                2. 結尾必須給出一句與碎片內容相關的「虛空叮嚀」。
+                """
+                
                 try:
-                    # ✨ 核心自癒：強制校準型號字串
-                    # 某些版本的 SDK 喜歡 'gemini-1.5-flash'，某些喜歡 'models/gemini-1.5-flash'
-                    # 我們先嘗試妳選擇的，若失敗自動微調名稱
-                    
-                    target_model = AI_MODEL
-                    
-                    # 如果妳選的是 1.5 且之前報過 404，我們在這裡做最後的格式修正
-                    if "1.5-flash" in target_model:
-                        # 嘗試最原始的名稱格式
-                        target_model = "gemini-1.5-flash" 
-
-                    model = genai.GenerativeModel(target_model)
-                    
-                    # 增加超時設定，確保 19GB 記憶體主機不會空等
-                    response = model.generate_content(
-                        f"你是一位末世架構師。根據碎片『{fragment}』指引問題：{user_question}"
-                    )
-                    
-                    # [後續顯示與 PDF 邏輯保持不變...]
-                    st.info(f"『 {response.text} 』")
-
-                except Exception as e:
-                    error_msg = str(e)
-                    if "404" in error_msg:
-                        st.error(f"❌ 404 航道遺失：系統找不到型號 '{target_model}'。")
-                        st.info("💡 小白龍架構師，請嘗試在側邊欄切換另一個 1.5 版本，或檢查 SDK 是否需要更新。")
-                    elif "429" in error_msg:
-                        st.error("❌ 2.5 能量耗盡，請切換至 1.5 備援航道。")
-                    else:
-                        st.error(f"❌ 虛空連結異常：{error_msg}")
-                    oracle_prompt = f"""
-                    你是《餘燼航路》的古老導靈。使用者(架構師)正處於困惑中。
-                    請根據這段打撈出的內容，給予一段充滿哲理、黃銅蒸氣與末世感的「答案之書」式指引。
-                    [打撈碎片]: {fragment}
-                    [使用者疑問]: {user_question}
-                    要求：語氣冷峻但具備指引性，結尾附上一句與碎片相關的虛空叮嚀。
-                    """
-                    
                     response = model.generate_content(oracle_prompt)
                     
-                    # 多媒體展現 (隨機顯像)
+                    # --- ✨ 視覺效果：隨機顯示一張素材圖片作為背景感 ---
                     all_imgs = [f for f in os.listdir(CURRENT_MEDIA_DIR) if f.endswith(('.png', '.jpg', '.webp'))]
                     if all_imgs:
-                        st.image(os.path.join(CURRENT_MEDIA_DIR, random.choice(all_imgs)), width=300, caption="🖼️ 啟示顯像")
+                        random_img = random.choice(all_imgs)
+                        st.image(os.path.join(CURRENT_MEDIA_DIR, random_img), width=300, caption="🖼️ 啟示顯像")
 
+                    # --- ✨ 聽覺效果：播放一段隨機音效 ---
                     all_audios = [f for f in os.listdir(CURRENT_MEDIA_DIR) if f.endswith(('.wav', '.mp3', '.ogg'))]
                     if all_audios:
-                        st.audio(os.path.join(CURRENT_MEDIA_DIR, random.choice(all_audios)))
+                        random_audio = random.choice(all_audios)
+                        st.audio(os.path.join(CURRENT_MEDIA_DIR, random_audio))
+                        st.caption(f"🎵 虛空殘響：{random_audio}")
 
                     # 顯示啟示
                     st.divider()
@@ -864,79 +738,155 @@ elif channel == "📜 航道啟示錄 (Oracle's Compass)":
                     st.info(f"『 {response.text} 』")
                     st.caption(f"📍 碎片來源：{fragment[:60]}...")
 
-                    # --- ✨ 核心修正：PDF 生成與物理存檔 ---
+                    # --- ✨ 導出功能：將啟示封存為 PDF ---
                     from weasyprint import HTML
-                    import html
-                    
-                    pdf_filename = f"Oracle_{datetime.datetime.now().strftime('%m%d_%H%M')}.pdf"
-                    pdf_path = os.path.join(ARCHIVE_DIR, pdf_filename)
-                    
-                    # 使用 html.escape 防止文本中的特殊字符破壞 HTML 結構
-                    safe_text = html.escape(response.text).replace('\n', '<br>')
-                    safe_fragment = html.escape(fragment)
-                    
-                    html_template = f"""
+                    pdf_name = f"Oracle_{datetime.datetime.now().strftime('%m%d%H%M')}.pdf"
+                    html_content = f"""
                     <div style="border: 10px double #D4AF37; padding: 40px; background: #2C2C2C; color: #E0E0E0; font-family: serif;">
                         <h1 style="color: #D4AF37; text-align: center;">《航道啟示錄》</h1>
-                        <p style="font-size: 18px; line-height: 1.6; text-align: center; font-style: italic;">{safe_text}</p>
-                        <hr style="border: 1px solid #D4AF37; margin: 30px 0;">
-                        <p style="font-size: 10px; color: #888; text-align: right;">碎片殘響：{safe_fragment}</p>
-                        <p style="font-size: 9px; color: #555; text-align: center; margin-top: 20px;">—— 錄於 總部核心 (acer) ——</p>
+                        <p style="font-size: 18px; line-height: 1.6; text-align: center;">{response.text.replace('\n', '<br>')}</p>
+                        <hr style="border: 1px solid #D4AF37;">
+                        <p style="font-size: 10px; color: #888; text-align: right;">碎片殘響：{fragment}</p>
                     </div>
                     """
-                    
-                    # 物理寫入硬碟
-                    HTML(string=html_template).write_pdf(pdf_path)
-                    st.success(f"✅ 啟示已永恆封存至圖書館")
-                    
-                    with open(pdf_path, "rb") as f:
-                        st.download_button("💾 下載 PDF 啟示箋備份", f, file_name=pdf_filename)
+                    if st.button("📥 封存此份啟示 (PDF)"):
+                        HTML(string=html_content).write_pdf(pdf_name)
+                        with open(pdf_name, "rb") as f:
+                            st.download_button("💾 下載 PDF 啟示箋", f, file_name=pdf_name)
 
                 except Exception as e:
-                    st.error(f"❌ 虛空連結中斷：{str(e)}")
+                    st.error(f"❌ 虛空連結中斷，請重試。")
+- **AI 報告**: 這是一個非常強大、功能豐富且充滿創意的 Streamlit 應用！「小白龍核心母站 v3.2.1」的名稱和「餘燼航路」的主題結合得非常好，應用內的介面描述和 AI 提示詞也都充滿了末世機甲感，這在開發工具中是很少見的，非常吸引人。
 
-    # --- ✨ 核心新增：📚 封存閱覽室介面 ---
-    st.markdown("---")
-    st.subheader("🏛️ 封存圖書館 (The Archives)")
-    if os.path.exists(ARCHIVE_DIR):
-        archived_files = sorted(os.listdir(ARCHIVE_DIR), reverse=True) # 最新排前面
-        if archived_files:
-            for arch in archived_files:
-                col_name, col_btn = st.columns([3, 1])
-                col_name.write(f"📜 **{arch}**")
-                file_full_path = os.path.join(ARCHIVE_DIR, arch)
-                with open(file_full_path, "rb") as f:
-                    col_btn.download_button("讀取", f, file_name=arch, key=f"read_{arch}")
-        else:
-            st.caption("⚓ 目前圖書館尚無封存紀錄。")
-            # 4. 🛰️ 虛空定標：模型可用性診斷 (徹底解決 404)
-    st.divider()
-    st.subheader("🛰️ 虛空定標診斷")
-    st.caption("當出現 404 錯誤時，啟動此雷達掃描當前 API Key 支援的精確模型座標。")
-    
-    if st.button("🔍 啟動全域模型掃描"):
-        # 優先抓取目前 Session 鎖定的 Key，其次才是 .env
-        ACTIVE_KEY = st.session_state.get("active_key", os.getenv("ai_key"))
-        
-        if not ACTIVE_KEY:
-            st.error("❌ 未偵測到有效金鑰，請先在側邊欄鎖定。")
-        else:
-            try:
-                with st.spinner("正在掃描虛空可用模型..."):
-                    genai.configure(api_key=ACTIVE_KEY)
-                    # 抓取所有模型清單
-                    model_list = genai.list_models()
-                    
-                    # 篩選出能產生內容的模型
-                    available = [m.name for m in model_list if 'generateContent' in m.supported_generation_methods]
-                    
-                    if available:
-                        st.success(f"✅ 掃描完成！發現 {len(available)} 個可用航道：")
-                        for m in available:
-                            # 用 code 格式方便妳直接複製正確名稱
-                            st.code(m)
-                        st.info("💡 複製上方包含 'flash' 的完整名稱（例如 models/gemini-1.5-flash-latest），貼回 model_map 的 Value 中。")
-                    else:
-                        st.warning("⚠️ 掃描完成，但此 Key 似乎沒有生成內容的權限。")
-            except Exception as e:
-                st.error(f"❌ 掃描崩潰：{str(e)}")
+整體架構清晰，檔案管理、AI 整合、Git 同步、PDF 導入導出等功能都實現得相當完善。特別是多模態輸入（語音、圖像、音訊、文字）、PDF 知識庫注入，以及生成多種報告的功能，都顯示出深思熟慮的設計。
+
+以下是針對程式碼的詳細審查與建議：
+
+---
+
+### **核心優點：**
+
+1.  **主題與使用者體驗高度結合：** 這是程式碼的一大亮點。所有介面文字、提示和功能描述都與「小白龍」和「餘燼航路」的主題緊密結合，極大地提升了工具的趣味性和沉浸感。
+2.  **多模態 AI 整合：** 完美利用 Google Gemini 的多模態能力，支援語音、圖片、音訊和文字的混合輸入，這對於開發者的靈感捕捉非常有用。
+3.  **完善的檔案管理：** 將日誌和媒體檔案依專案分開儲存，並提供清晰的物理路徑，便於管理和查找。`initialize_environment()` 的自癒機制也很棒。
+4.  **強大的 PDF 整合：** 支援 `PyPDF2` 導入知識庫（如維修手冊或報告）給 AI 參考，並透過 `weasyprint` 導出格式精美的 PDF 報告，這在開發輔助工具中非常實用。
+5.  **Git 自動化同步：** `secure_auto_push` 函數提供了一鍵同步到 GitHub 的能力，雖然有改進空間，但基本功能已實現。
+6.  **專案管理：** 能夠切換、新增、修改和刪除專案，使這個工具不僅限於單一專案。
+7.  **`st.session_state` 運用得當：** 有效利用 `st.session_state` 來管理 API Key、避免重複音訊儲存等，提高了應用程式的穩定性和效率。
+8.  **沉浸式「啟示錄」頻道：** 「航道啟示錄」頻道結合隨機圖片、音效和哲學式 AI 啟示，創意十足，能夠為開發者帶來靈感。
+
+---
+
+### **審查與改進建議：**
+
+#### **1. 關鍵錯誤或潛在問題 (Critical/High Priority):**
+
+*   **`initialize_environment()` 中的 `PROJECT_ROOT` 未定義：**
+    *   在頂部宣告了 `DATA_ROOT`，但在 `initialize_environment()` 函數中使用了 `PROJECT_ROOT` 變數，它並未被定義。這會導致應用程式啟動失敗。
+    *   **修正建議：** 將 `PROJECT_ROOT` 改為 `DATA_ROOT`。
+        ```python
+        # 原代碼: folders_to_create = [PROJECT_ROOT, MEDIA_DIR, LOG_DIR]
+        # 修正為:
+        folders_to_create = [DATA_ROOT, MEDIA_DIR, LOG_DIR]
+        ```
+*   **Git `--force` 推送的風險：**
+    *   `secure_auto_push` 函數使用了 `git push ... --force`。 `--force` 會強制覆蓋遠端分支的歷史，導致潛在的資料丟失，尤其是在協作環境下非常危險。對於單人開發者而言，如果他/她理解風險，可能尚可接受，但仍不推薦作為預設行為。
+    *   **修正建議：**
+        1.  移除 `--force`。讓 Git 在遇到衝突時報錯。
+        2.  如果仍需類似功能，可以提供選項，讓使用者明確選擇是否強制推送，並加上顯眼的警告。
+        3.  更好的做法是，在推送前先嘗試 `git pull origin main --rebase`，解決衝突後再 `git push origin main`。
+*   **`LOG_DIR` 和 `MEDIA_DIR` 的重複定義與潛在冗餘目錄：**
+    *   程式碼頂部定義了 `LOG_DIR = os.path.join(DATA_ROOT, "logs")` 和 `MEDIA_DIR = os.path.join(DATA_ROOT, "media")`。
+    *   但在 `st.sidebar` 選擇專案後，又重新定義為 `LOG_DIR = os.path.join(DATA_ROOT, current_p_name, "logs")` 和 `MEDIA_DIR = os.path.join(DATA_ROOT, current_p_name, "media")`。
+    *   這意味著 `initialize_environment()` 可能會在 `all_projects` 根目錄下創建 `logs` 和 `media` 資料夾，而後續操作則使用 `all_projects/<project_name>/logs` 和 `all_projects/<project_name>/media`。這會導致不必要的空目錄。
+    *   **修正建議：**
+        1.  移除程式碼頂部的 `LOG_DIR` 和 `MEDIA_DIR` 全局定義。
+        2.  將 `initialize_environment()` 函數的呼叫放在 `current_p_name` 確定之後，並只創建該專案的子目錄。
+        ```python
+        # 移除頂部兩行
+        # LOG_DIR = os.path.join(DATA_ROOT, "logs")
+        # MEDIA_DIR = os.path.join(DATA_ROOT, "media")
+
+        # ... (中間代碼) ...
+
+        # 在 sidebar 選定 current_p_name 後
+        with st.sidebar:
+            # ...
+            current_p_name = st.selectbox("核心專案切換", list(PROJECTS.keys()))
+            config = PROJECTS[current_p_name]
+
+            # 定義專案特定的 LOG_DIR 和 MEDIA_DIR
+            # 然後調用 initialize_environment() 或直接檢查創建
+            PROJECT_LOG_DIR = os.path.join(DATA_ROOT, current_p_name, "logs")
+            PROJECT_MEDIA_DIR = os.path.join(DATA_ROOT, current_p_name, "media")
+            PROJECT_SCRIPT_PATH = config.get("local_script_path", "") # 或許也需要確保這個路徑存在
+
+            for d in [PROJECT_LOG_DIR, PROJECT_MEDIA_DIR, PROJECT_SCRIPT_PATH]:
+                if d and not os.path.exists(d): # 檢查 d 是否為空字串，因為 script_path 可能為空
+                    os.makedirs(d)
+                    print(f"🛠️ 物理空間已重構：{d}")
+
+        # 後續程式碼中使用 PROJECT_LOG_DIR 和 PROJECT_MEDIA_DIR
+        # 例如: if channel == "📸 素材打撈 (Media)": ... os.path.join(PROJECT_MEDIA_DIR, ...)
+        ```
+*   **`genai.configure` 的頻繁呼叫：**
+    *   `genai.configure(api_key=FINAL_KEY)` 位於 Streamlit 腳本的主體中，每次 Streamlit 重新運行時都會執行。這並不會造成功能性錯誤，但效率不高。
+    *   **修正建議：** 可以在 `FINAL_KEY` 確定並非空值時，只呼叫一次 `genai.configure`，或者在每個用到 `genai` 的功能區塊中，檢查是否已配置，只配置一次。但以 Streamlit 的單腳本模型，目前這樣也能接受，不是最優先的優化。
+
+#### **2. 功能性改進與優化 (Medium Priority):**
+
+*   **AI Context 處理大型專案：**
+    *   在「虛空啟示」和「航行日誌」頻道中，會讀取所有 `.md` 和 `.gd` 檔案的內容到記憶體，並傳送給 AI。對於小型專案這沒問題，但如果專案成長到數十萬行程式碼或大量日誌，可能會遇到以下問題：
+        *   **記憶體溢出：** 本地應用程式記憶體不足。
+        *   **API Token 限制：** Google Gemini 的上下文窗口雖然很大，但仍有上限。
+        *   **AI 處理效率：** 大量無關資訊會稀釋關鍵內容，影響 AI 回答品質。
+    *   **改進建議：**
+        1.  **內容摘要：** 對於較大的日誌或程式碼檔案，可以先讓 AI 或使用本地 NLP 模型提取摘要，而不是傳送完整內容。
+        2.  **基於查詢的檢索：** 根據使用者提出的問題，智慧地篩選相關的檔案或檔案片段。
+        3.  **分批處理：** 將大型檔案分塊傳送給 AI 處理。
+        4.  **警告提示：** 如果偵測到總內容量接近 token 限制，可以提示使用者。
+*   **`.gitignore` 的動態性：**
+    *   `.gitignore` 是硬編碼的。如果專案有特殊的忽略需求，可能需要手動編輯。
+    *   **改進建議：** 可以在「核心維護」頻道中提供一個文本區域，讓使用者編輯 `.gitignore` 內容，然後儲存。
+*   **Git 使用者資訊：**
+    *   `git config --global user.email` 和 `user.name` 被硬編碼。
+    *   **改進建議：** 可以將這些資訊從 `.env` 讀取，或在「核心維護」頻道中提供輸入框，讓使用者自行設定。
+*   **`weasyprint` 的依賴提醒：**
+    *   `weasyprint` 在某些系統上需要額外的系統級依賴（例如 `cairo`, `pango` 等）。雖然這不是程式碼問題，但在部署或分享時，最好能提醒使用者。
+    *   **改進建議：** 可以在 README 或應用程式的「核心維護」頻道中加入相關的安裝說明。
+*   **錯誤訊息的詳細程度：**
+    *   許多 `except Exception as e:` 捕獲了所有錯誤。雖然防止了程式崩潰，但使用者看到的錯誤訊息可能不夠具體。
+    *   **改進建議：** 針對常見的錯誤類型（如 `FileNotFoundError`, 網路請求失敗 `requests.exceptions.RequestException`, API 錯誤 `genai.core.exceptions.GoogleGenerativeAIException` 等）進行更精確的捕獲和處理，提供更友善的提示。
+
+#### **3. 小細節與程式碼風格 (Low Priority):**
+
+*   **一致的檔名命名：** 在「素材打撈」中，音訊和影像檔案都加入了 `station_origin` 前綴，但 `mic_name` 有時會手動添加，有時會直接使用 `audio_bytes` 的檔名。確保所有自動儲存的檔案都有一致的命名規則。
+    *   目前 `mic_name = f"mic_{station_origin}_{timestamp}.wav"` 是正確的，`u_img` 和 `u_audio` 也都有加 `station_origin_` 前綴。所以這點做得很好，可以忽略這個建議。
+*   **Streamlit Context Headers：**
+    *   `st.context.headers` 雖然可以獲取一些資訊，但 Streamlit 文件中並未明確說明這是一個公開且穩定的 API，未來版本可能有變。
+    *   **改進建議：** 如果只是為了顯示資訊，目前沒問題。如果用於核心邏輯，需要注意其穩定性。
+*   **PDF 內容導出的 HTML 轉義：**
+    *   在導出 PDF 時，使用 `replace('\n', '<br>')` 將換行符轉換為 HTML 的 `<br>` 標籤，這在大多數情況下是足夠的。但如果 AI 回應包含其他特殊 HTML 字符（如 `<`, `>`, `&`），它們可能不會被正確渲染。
+    *   **改進建議：** 可以使用 `html.escape()` 來更安全地處理 AI 回應的文本，確保所有特殊字符都被正確轉義。
+        ```python
+        import html
+        # ...
+        html_content = f"""...
+            <div>{html.escape(response.text).replace('\n', '<br>')}</div>
+        ..."""
+        ```
+*   **移除專案的確認機制：**
+    *   刪除專案是一個高風險操作，目前只有一個按鈕。
+    *   **改進建議：** 可以增加一個確認對話框或要求使用者輸入專案名稱再次確認，防止誤觸。
+
+---
+
+### **總結：**
+
+這個應用程式是一個非常出色的個人專案，展現了強大的工程能力、創意和對細節的關注。它不僅僅是一個 AI 介面，更是一個針對特定開發情境高度客製化的「數位助手」。
+
+主要的改進點在於解決 `PROJECT_ROOT` 未定義的錯誤，以及重新審視 `git push --force` 的使用。一旦這些問題得到解決，這個工具將會更加穩定、安全和易於維護。
+
+做得非常棒，繼續加油！「小白龍核心母站」有巨大的潛力！
+
+---

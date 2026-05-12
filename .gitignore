@@ -1,5 +1,4 @@
 .env
 __pycache__/
-*.json
-all_projects/media/
-all_projects/logs/
+*.pyc
+.streamlit/
