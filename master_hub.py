@@ -114,38 +114,83 @@ for d in [LOG_DIR, MEDIA_DIR]:
 if channel == "💡 媒體採集":
     st.title("💡 媒體採集與跨模態分析")
     st.markdown("---")
-    u_text = st.text_area("🧠 分析指令", placeholder="描述需求...")
+    
+    # 1. 指令輸入與麥克風組件
+    u_text = st.text_area("🧠 分析指令 (或用語音輸入後自動填充)", placeholder="描述需求...")
+    
+    st.subheader("🎤 語音靈感捕捉")
+    # 使用 streamlit 自帶的錄音組件 (需安裝 streamlit-audio-recorder 或使用以下標準錄音方案)
+    from audio_recorder_streamlit import audio_recorder
+    audio_bytes = audio_recorder(
+        text="點擊圖示開始/停止錄音",
+        recording_color="#e74c3c",
+        neutral_color="#D4AF37",
+        icon_name="microphone",
+        icon_size="2x",
+    )
+
+    st.divider()
+    
+    # 2. 檔案上傳區
     col1, col2 = st.columns(2)
     with col1:
         u_img = st.file_uploader("🖼️ 儲存並分析圖片", type=['png', 'jpg', 'jpeg'])
     with col2:
-        u_audio = st.file_uploader("🎵 儲存並分析音訊", type=['mp3', 'wav', 'ogg'])
+        u_audio = st.file_uploader("🎵 上傳現有音訊檔", type=['mp3', 'wav', 'ogg'])
     
-    if st.button("🚀 執行與儲存"):
-        if not (u_img or u_audio or u_text):
-            st.warning("請提供素材。")
+    # 3. 執行執行與儲存邏輯
+    if st.button("🚀 啟動跨模態採集"):
+        if not (u_img or u_audio or u_text or audio_bytes):
+            st.warning("請提供素材或進行錄音。")
         else:
-            with st.spinner("存檔中..."):
+            with st.spinner("核心引擎處理媒體中..."):
                 model = genai.GenerativeModel(AI_MODEL)
-                content_payload = [u_text if u_text else "分析此媒體"]
-                ts = datetime.datetime.now().strftime('%m%d_%H%M%S')
+                content_payload = []
+                timestamp = datetime.datetime.now().strftime('%m%d_%H%M%S')
+                
+                # --- 處理麥克風錄音 ---
+                if audio_bytes:
+                    mic_name = f"mic_{timestamp}.wav"
+                    mic_path = os.path.join(MEDIA_DIR, mic_name)
+                    with open(mic_path, "wb") as f:
+                        f.write(audio_bytes)
+                    content_payload.append({"mime_type": "audio/wav", "data": audio_bytes})
+                    st.toast(f"🎙️ 麥克風錄音已入庫: {mic_name}")
+
+                # --- 處理圖片 ---
                 if u_img:
                     img = Image.open(u_img)
-                    p = os.path.join(MEDIA_DIR, f"img_{ts}.png")
-                    img.save(p)
+                    img_name = f"img_{timestamp}.png"
+                    img_path = os.path.join(MEDIA_DIR, img_name)
+                    img.save(img_path)
                     content_payload.append(img)
+                    st.toast(f"🖼️ 圖片已入庫: {img_name}")
+
+                # --- 處理上傳音訊 ---
                 if u_audio:
-                    data = u_audio.read()
-                    p = os.path.join(MEDIA_DIR, u_audio.name)
-                    with open(p, "wb") as f: f.write(data)
-                    content_payload.append({"mime_type": u_audio.type, "data": data})
-                if FINAL_KEY:
-                    res = model.generate_content(content_payload)
-                    st.write(res.text)
-                    with open(os.path.join(LOG_DIR, "media_log.md"), "a", encoding="utf-8") as f:
-                        f.write(f"\n## {datetime.datetime.now()}\n{res.text}\n")
-    st.divider()
-    st.caption(f"💾 目前存儲路徑：{MEDIA_DIR}")
+                    a_data = u_audio.read()
+                    a_path = os.path.join(MEDIA_DIR, u_audio.name)
+                    with open(a_path, "wb") as f: f.write(a_data)
+                    content_payload.append({"mime_type": u_audio.type, "data": a_data})
+                    st.toast(f"🎵 音訊檔已入庫: {u_audio.name}")
+
+                # 組合最終指令
+                final_prompt = u_text if u_text else "請分析以上媒體內容。如果是語音錄音，請先將其轉錄為文字並總結重點。"
+                content_payload.insert(0, final_prompt)
+
+                try:
+                    if FINAL_KEY:
+                        response = model.generate_content(content_payload)
+                        st.markdown("### 📝 AI 綜合分析報告")
+                        st.write(response.text)
+                        
+                        # 存入日誌，供『答案之書』未來調用
+                        with open(os.path.join(LOG_DIR, "media_log.md"), "a", encoding="utf-8") as f:
+                            f.write(f"\n## {datetime.datetime.now()} [多模態採集]\n- **分析內容**: {response.text}\n")
+                    else:
+                        st.info("⚠️ 檔案已物理存檔至 media 資料夾，但未配置 API Key 進行分析。")
+                except Exception as e:
+                    st.error(f"❌ 跨模態解析失敗: {str(e)}")
 
 elif channel == "📜 AI 寫腳本":
     st.title("📜 AI 自動寫腳本")
