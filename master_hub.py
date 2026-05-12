@@ -129,42 +129,52 @@ for d in [LOG_DIR, MEDIA_DIR]:
 if channel == "📸 素材打撈 (Media)":
     st.title("📸 殘留影像與波形打撈")
     st.markdown("---")
+
+    # ⚡ 核心優化：發射站與設備識別
+    # 嘗試從瀏覽器資訊判斷設備 (簡單識別手機或電腦)
+    ua = st.context.headers.get("User-Agent", "").lower()
+    dev_type = "行動裝置" if "mobile" in ua else "核心主機"
     
+    col_loc, col_info = st.columns([1, 2])
+    with col_loc:
+        # 讓家人選擇地點，預設為總部
+        station_origin = st.selectbox("📍 當前發射站", ["總部 (acer)", "台北站", "新竹站", "台南站"])
+    with col_info:
+        st.caption(f"📡 偵測設備類型：`{dev_type}`")
+        st.caption(f"🌍 接入網址：`{st.context.headers.get('Host')}`")
+
     # 1. 指令輸入區域
     u_text = st.text_area("🧠 分析指令 (或用語音輸入後自動填充)", placeholder="描述你的開發需求或靈感...", help="這些文字會連同媒體一起交給 AI 處理。")
     
     st.subheader("🎤 語音靈感捕捉")
-    # 使用錄音組件
     from audio_recorder_streamlit import audio_recorder
     audio_bytes = audio_recorder(
-        text="點擊開始/停止（自動入庫）",
+        text=f"來自【{station_origin}】的通訊 (點擊開始/停止)",
         recording_color="#e74c3c",
         neutral_color="#D4AF37",
         icon_name="microphone",
         icon_size="2x",
     )
 
-   # ---------------------------------------------------------
-    # ⚡ [自動入庫監聽器] - 錄音攔截與即時回放
+    # ---------------------------------------------------------
+    # ⚡ [自動入庫監聽器] - 加入地點標記的錄音攔截
     # ---------------------------------------------------------
     if audio_bytes:
-        # 使用 session_state 防止重複寫入
         if "last_mic_data" not in st.session_state or st.session_state.last_mic_data != audio_bytes:
             timestamp = datetime.datetime.now().strftime('%m%d_%H%M%S')
-            mic_name = f"mic_{timestamp}.wav"
+            # 檔名加入地點資訊，例如: mic_台北站_0512_155149.wav
+            mic_name = f"mic_{station_origin}_{timestamp}.wav"
             mic_path = os.path.join(MEDIA_DIR, mic_name)
             
             with open(mic_path, "wb") as f:
                 f.write(audio_bytes)
             
             st.session_state.last_mic_data = audio_bytes 
-            st.session_state.current_mic_path = mic_path # 記住路徑供播放
-            st.sidebar.success(f"🎙️ 聲波已入庫: {mic_name}")
+            st.session_state.current_mic_path = mic_path
+            st.sidebar.success(f"🎙️ 聲波已從 {station_origin} 入庫")
 
-        # 顯示播放器：直接讀取剛存好的「物理檔案」
-        st.write("🎵 剛打撈到的聲波：")
+        st.write(f"🎵 來自 **{station_origin}** 的即時聲波：")
         st.audio(audio_bytes, format="audio/wav")
-    # ---------------------------------------------------------
 
     st.divider()
     
@@ -172,97 +182,85 @@ if channel == "📸 素材打撈 (Media)":
     col1, col2 = st.columns(2)
     with col1:
         u_img = st.file_uploader("🖼️ 影像打撈", type=['png', 'jpg', 'jpeg'])
-        # ⚡ [自動入庫監聽器] - 圖片攔截
         if u_img:
-            img_path = os.path.join(MEDIA_DIR, u_img.name)
+            # 圖片也加入地點前綴 (選擇性)
+            img_path = os.path.join(MEDIA_DIR, f"{station_origin}_{u_img.name}")
             if not os.path.exists(img_path):
                 from PIL import Image
                 img = Image.open(u_img)
                 img.save(img_path)
-                st.sidebar.success(f"🖼️ 影像已物理入庫: {u_img.name}")
+                st.sidebar.success(f"🖼️ 影像已存入 {station_origin} 倉庫")
 
     with col2:
         u_audio = st.file_uploader("🎵 音訊打撈", type=['mp3', 'wav', 'ogg', 'm4a'])
-        # ⚡ [自動入庫監聽器] - 音訊檔案攔截
         if u_audio:
-            a_path = os.path.join(MEDIA_DIR, u_audio.name)
+            a_path = os.path.join(MEDIA_DIR, f"{station_origin}_{u_audio.name}")
             if not os.path.exists(a_path):
                 with open(a_path, "wb") as f:
                     f.write(u_audio.getbuffer())
-                st.sidebar.success(f"🎵 音訊已物理入庫: {u_audio.name}")
+                st.sidebar.success(f"🎵 音訊已存入 {station_origin} 倉庫")
 
     st.markdown("---")
     
-    # 3. 執行 AI 分析按鈕 (同步時間座標版)
+    # 3. 執行 AI 分析按鈕 (同步時間與地點資訊)
     if st.button("🚀 啟動跨模態解析 (AI 思考)"):
         if not (u_img or u_audio or u_text or audio_bytes):
             st.warning("📡 偵測不到感測器數據，請先提供素材或錄音。")
         else:
-            with st.spinner("核心引擎處理媒體中..."):
-                # ⚡ 核心修正：固定單一時間點，確保所有檔案與日誌「秒數對齊」
+            with st.spinner(f"正在連線至 {station_origin} 進行解析..."):
                 now = datetime.datetime.now()
-                timestamp = now.strftime('%m%d_%H%M%S') # 用於檔名: 0512_154106
-                log_time_str = now.strftime('%Y-%m-%d %H:%M:%S') # 用於日誌標題
+                timestamp = now.strftime('%m%d_%H%M%S')
+                log_time_str = now.strftime('%Y-%m-%d %H:%M:%S')
                 
                 model = genai.GenerativeModel(AI_MODEL)
                 content_payload = []
-                mic_name = "無"
+                # 確保按鈕觸發時生成的檔名也帶地點
+                mic_name = f"mic_{station_origin}_{timestamp}.wav" if audio_bytes else "無"
                 
-                # --- 處理麥克風錄音並同步存檔 ---
                 if audio_bytes:
-                    mic_name = f"mic_{timestamp}.wav"
                     mic_path = os.path.join(MEDIA_DIR, mic_name)
                     with open(mic_path, "wb") as f:
                         f.write(audio_bytes)
                     content_payload.append({"mime_type": "audio/wav", "data": audio_bytes})
                 
-                # --- 處理上傳圖片 ---
                 if u_img:
                     from PIL import Image
                     img = Image.open(u_img)
                     content_payload.append(img)
-                    # 順便物理存檔
-                    img.save(os.path.join(MEDIA_DIR, u_img.name))
+                    img.save(os.path.join(MEDIA_DIR, f"{station_origin}_{u_img.name}"))
                 
-                # --- 處理上傳音訊 ---
                 if u_audio:
                     a_data = u_audio.read()
                     content_payload.append({"mime_type": u_audio.type, "data": a_data})
-                    with open(os.path.join(MEDIA_DIR, u_audio.name), "wb") as f:
-                        f.write(a_data)
 
-                # 組合指令
-                final_prompt = u_text if u_text else "請分析以上媒體內容。如果是語音，請轉錄為文字。如果是圖片，請描述視覺細節並給出開發建議。"
+                final_prompt = u_text if u_text else "請分析以上媒體內容。"
                 content_payload.insert(0, final_prompt)
 
                 try:
                     if FINAL_KEY:
                         response = model.generate_content(content_payload)
-                        st.markdown("### 📝 AI 綜合分析報告")
+                        st.markdown(f"### 📝 AI 綜合分析報告 (來源：{station_origin})")
                         
-                        # 即時回放，解決「播不了」的問題
                         if audio_bytes:
-                            st.write(f"🎙️ **語音已存入：{mic_name}**")
+                            st.write(f"🎙️ **語音來源：{station_origin} | 檔名：{mic_name}**")
                             st.audio(audio_bytes, format="audio/wav")
-                        elif u_audio:
-                            st.write(f"🎵 **回放上傳音軌：{u_audio.name}**")
-                            st.audio(u_audio, format=u_audio.type)
                         
                         st.write(response.text)
                         
-                        # --- 同步寫入航行日誌 (確保格式能被日誌頻道精確打撈) ---
+                        # --- 寫入航行日誌 (標註發射站) ---
                         log_file = os.path.join(LOG_DIR, "media_log.md")
                         with open(log_file, "a", encoding="utf-8") as f:
-                            # 這裡的格式必須與日誌頻道的 re.search 正則表達式匹配
-                            f.write(f"\n## {log_time_str} [自動入庫分析]\n")
+                            # 加入 [地點標記] 方便搜尋頻道打撈
+                            f.write(f"\n## {log_time_str} [來自 {station_origin} 的自動入庫分析]\n")
+                            f.write(f"- **發射站**: {station_origin} ({dev_type})\n")
                             f.write(f"- **關聯音訊**: {mic_name}\n")
                             f.write(f"- **指令**: {u_text if u_text else '預設分析'}\n")
                             f.write(f"- **AI 報告**: {response.text}\n")
-                            f.write("\n---\n") # 加入分隔線，視覺更清晰
+                            f.write("\n---\n")
                     else:
-                        st.info("⚠️ 檔案已安全物理存檔，但由於 API Key 未配置，無法啟動虛空解析。")
+                        st.info("⚠️ 檔案已物理存檔，但 API Key 未配置。")
                 except Exception as e:
-                    st.error(f"❌ 核心解析引擎異常: {str(e)}")
+                    st.error(f"❌ 解析引擎異常: {str(e)}")
 
 elif channel == "🔧 齒輪重組 (Script)":
     st.title("🔧 邏輯齒輪精密重組")
