@@ -227,7 +227,7 @@ with st.sidebar:
         "📸 素材打撈 (Media)", "🔧 齒輪重組 (Script)", 
         "🧪 結構修復 (Patch)", "🔮 虛空啟示 (Oracle)",
         "📜 航行日誌 (Log)", "📜 航道啟示錄 (Oracle's Compass)",
-        "⚙️ 核心維護 (System)"
+        "📚 封存圖書館 (Library)", "⚙️ 核心維護 (System)"
     ])
 
 # ==========================================
@@ -394,7 +394,7 @@ elif channel == "🔧 齒輪重組 (Script)":
     st.caption("🔍 模式：精密重構 — 適合增加新功能、提升代碼效能與可讀性")
     st.markdown("---")
 
-    # --- 新增：外部物資打撈區 (檔案拖入) ---
+    # --- 1. 外部物資打撈區 (檔案拖入) ---
     with st.expander("📥 外部腳本快速打撈 (拖入檔案)", expanded=False):
         uploaded_files = st.file_uploader(
             "拖入要加入專案的腳本 (.gd, .py, .json, .txt)", 
@@ -409,7 +409,6 @@ elif channel == "🔧 齒輪重組 (Script)":
                 content = uploaded_file.read().decode("utf-8")
                 st.text(f"📄 偵測到檔案：{uploaded_file.name}")
                 
-                # 預覽與儲存按鈕
                 col1, col2 = st.columns([1, 4])
                 with col1:
                     if st.button(f"💾 存入專案", key=f"save_upload_{uploaded_file.name}"):
@@ -417,13 +416,13 @@ elif channel == "🔧 齒輪重組 (Script)":
                         with open(target_full_path, "w", encoding="utf-8") as f:
                             f.write(content)
                         st.success(f"已存入：{uploaded_file.name}")
-                        st.rerun() # 重新整理以更新下方選擇清單
+                        st.rerun() 
                 with col2:
                     st.caption(f"目標路徑：{script_path}")
 
     st.markdown("---")
 
-    # --- 原有的本地檔案編輯區 ---
+    # --- 2. 本地檔案編輯與 AI 分析區 ---
     if script_path and os.path.exists(script_path):
         files = [f for f in os.listdir(script_path) if f.endswith('.gd') or f.endswith('.py')]
         
@@ -439,7 +438,6 @@ elif channel == "🔧 齒輪重組 (Script)":
             col_e, col_a = st.columns([1, 1])
             with col_e:
                 st.subheader("📝 代碼編輯器")
-                # 這裡改用 st.text_area 讓妳編輯
                 new_code = st.text_area("直接編輯並儲存", value=current_code, height=500)
                 if st.button("💾 儲存物理修改", key="save_script"):
                     with open(file_full_path, "w", encoding="utf-8") as f:
@@ -455,20 +453,47 @@ elif channel == "🔧 齒輪重組 (Script)":
                     st.markdown(response.text)
                     st.session_state.last_script_advice = response.text
 
+                # --- 3. 報告產出核定區 (新功能) ---
                 if "last_script_advice" in st.session_state:
-                    if st.button("📥 導出優化報告 (PDF)"):
-                        # 這裡保留妳原本的 WeasyPrint 邏輯
+                    st.write("---")
+                    st.subheader("📥 報告產出核定")
+                    
+                    # 定位專案內的 reports 資料夾
+                    report_dir = os.path.join(DATA_ROOT, current_p_name, "reports")
+                    if not os.path.exists(report_dir):
+                        os.makedirs(report_dir)
+                    
+                    # 預設檔名包含時間戳記
+                    timestamp = datetime.datetime.now().strftime('%m%d_%H%M')
+                    default_path = os.path.join(report_dir, f"Refactor_{selected_file.split('.')[0]}_{timestamp}.pdf")
+                    
+                    # 讓架構師核定路徑
+                    custom_path = st.text_input("核定 PDF 儲存路徑：", value=default_path)
+                    
+                    if st.button("🚩 執行物理生成報告", type="secondary", use_container_width=True):
                         try:
                             from weasyprint import HTML
-                            html = f"<h1>{selected_file} 優化建議</h1><hr>{st.session_state.last_script_advice.replace('\n', '<br>')}"
-                            pdf_filename = f"Refactor_{selected_file}.pdf"
-                            HTML(string=html).write_pdf(pdf_filename)
-                            with open(pdf_filename, "rb") as f:
-                                st.download_button("💾 下載 PDF", f, file_name=pdf_filename)
+                            html_content = f"""
+                            <html>
+                                <head><style>body {{ font-family: sans-serif; line-height: 1.6; padding: 20px; }} 
+                                h1 {{ color: #D4AF37; }} hr {{ border: 1px solid #ddd; }}</style></head>
+                                <body>
+                                    <h1>{selected_file} 邏輯進化報告</h1>
+                                    <p>生成時間: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
+                                    <hr>
+                                    <div>{st.session_state.last_script_advice.replace('\n', '<br>')}</div>
+                                </body>
+                            </html>
+                            """
+                            HTML(string=html_content).write_pdf(custom_path)
+                            st.success(f"✅ 報告已打撈至：{custom_path}")
+                            
+                            with open(custom_path, "rb") as f:
+                                st.download_button("💾 下載備份到本地", f, file_name=os.path.basename(custom_path))
                         except Exception as e:
-                            st.error(f"PDF 導出失敗，請檢查 WeasyPrint 環境：{e}")
+                            st.error(f"PDF 生成失敗：{e}")
     else:
-        st.error("❌ 腳本路徑未配置或不存在。請至核心設定配置 local_script_path。")
+        st.error("❌ 腳本路徑未配置。請至核心設定配置 local_script_path。")
 
 elif channel == "🧪 結構修復 (Patch)":
     st.title("🧪 檔案結構物理修復 (PDF 知識導入版)")
@@ -477,64 +502,93 @@ elif channel == "🧪 結構修復 (Patch)":
 
     script_path = config.get("local_script_path", "")
     if script_path and os.path.exists(script_path):
-        files = [f for f in os.listdir(script_path) if f.endswith('.gd')]
-        selected_file = st.selectbox("🎯 選擇待修補目標", files, key="patch_select")
-        file_full_path = os.path.join(script_path, selected_file)
-        
-        with open(file_full_path, "r", encoding="utf-8") as f:
-            current_code = f.read()
+        # 獲取腳本清單
+        files = [f for f in os.listdir(script_path) if f.endswith('.gd') or f.endswith('.py')]
+        if not files:
+            st.info("📂 腳本夾內空無一物，請先從「齒輪重組」打撈物資。")
+        else:
+            selected_file = st.selectbox("🎯 選擇待修補目標", files, key="patch_select")
+            file_full_path = os.path.join(script_path, selected_file)
+            
+            with open(file_full_path, "r", encoding="utf-8") as f:
+                current_code = f.read()
 
-        # --- 1. 知識導入區 ---
-        st.subheader("📋 導入維修手冊 (PDF)")
-        uploaded_pdf = st.file_uploader("上傳之前的 AI 診斷報告或參考文件", type=['pdf'])
-        pdf_knowledge = ""
-        if uploaded_pdf:
-            pdf_reader = PyPDF2.PdfReader(uploaded_pdf)
-            for page in pdf_reader.pages:
-                pdf_knowledge += page.extract_text()
-            st.success("✅ PDF 知識已注入緩衝區")
+            # --- 1. 知識注入 (PDF) ---
+            st.subheader("📋 導入維修手冊 (PDF)")
+            uploaded_pdf = st.file_uploader("上傳之前的 AI 診斷報告或參考文件", type=['pdf'])
+            pdf_knowledge = ""
+            if uploaded_pdf:
+                import PyPDF2
+                pdf_reader = PyPDF2.PdfReader(uploaded_pdf)
+                for page in pdf_reader.pages:
+                    pdf_knowledge += page.extract_text()
+                st.success(f"✅ PDF 知識已注入緩衝區 ({len(pdf_knowledge)} 字)")
 
-        st.divider()
+            st.divider()
 
-        # --- 2. 修復與導出區 ---
-        st.subheader("🔥 物理修復執行")
-        fix_instr = st.text_area("描述修復需求", placeholder="例如：根據 PDF 建議修復 null 引用...")
+            # --- 2. 修復與報告核定 ---
+            st.subheader("🔥 物理修復執行")
+            fix_instr = st.text_area("描述修復需求", placeholder="例如：根據 PDF 第 3 頁建議，修復 harpoon.gd 的 null 引用...")
 
-        if st.button("🛠️ 執行物理重構與生成報告"):
-            with st.spinner("AI 正在閱讀 PDF 並重構代碼..."):
-                model = genai.GenerativeModel(AI_MODEL)
-                full_prompt = f"你現在是戰地維修工。參考手冊：{pdf_knowledge}\n請根據指令修復此 Godot 代碼，僅輸出純代碼。\n指令：{fix_instr}\n代碼：\n{current_code}"
-                
-                try:
-                    response = model.generate_content(full_prompt)
-                    clean_code = response.text.replace("```gdscript", "").replace("```", "").strip()
-                    
-                    # 執行物理覆寫
-                    with open(file_full_path, "w", encoding="utf-8") as f:
-                        f.write(clean_code)
-                    
-                    st.success(f"✅ {selected_file} 已完成物理修補！")
-                    
-                    # --- ✨ 核心新增：導出 PDF 修復報告 ---
-                    from weasyprint import HTML
-                    pdf_name = f"Patch_Report_{selected_file.replace('.', '_')}.pdf"
-                    html_content = f"""
-                    <html><body style="font-family: sans-serif; padding: 20px;">
-                        <h1 style="color: #D4AF37;">結構修復報告：{selected_file}</h1>
-                        <p><b>修復指令：</b> {fix_instr}</p>
-                        <hr>
-                        <h2>修復後代碼預覽：</h2>
-                        <pre style="background: #f4f4f4; padding: 10px;">{clean_code[:1000]}...</pre>
-                        <p style="font-size: 10px; color: #999;">小白龍核心邏輯架構師認證</p>
-                    </body></html>
-                    """
-                    HTML(string=html_content).write_pdf(pdf_name)
-                    with open(pdf_name, "rb") as f:
-                        st.download_button("💾 下載本次修復 PDF 報告", f, file_name=pdf_name)
-                except Exception as e:
-                    st.error(f"修復失敗: {e}")
+            # --- 新增：報告路徑核定區 ---
+            report_dir = os.path.join(DATA_ROOT, current_p_name, "reports")
+            if not os.path.exists(report_dir):
+                os.makedirs(report_dir)
+            
+            timestamp = datetime.datetime.now().strftime('%m%d_%H%M')
+            default_report_path = os.path.join(report_dir, f"Patch_Report_{selected_file.split('.')[0]}_{timestamp}.pdf")
+            
+            st.info(f"📍 預設修復報告儲存路徑：\n`{default_report_path}`")
+            custom_patch_path = st.text_input("核定報告儲存位置：", value=default_report_path)
+
+            if st.button("🛠️ 執行物理重構與生成報告", type="primary", use_container_width=True):
+                if not fix_instr:
+                    st.error("❌ 請輸入修復指令，否則維修工無法動工。")
+                else:
+                    with st.spinner("戰地維修工正在閱讀 PDF 並重新鍛造代碼..."):
+                        model = genai.GenerativeModel(AI_MODEL)
+                        full_prompt = f"你現在是戰地維修工。參考手冊內容：\n{pdf_knowledge}\n\n指令：{fix_instr}\n\n請根據手冊與指令修復此代碼，僅輸出純代碼，不要有說明。\n代碼：\n{current_code}"
+                        
+                        try:
+                            response = model.generate_content(full_prompt)
+                            clean_code = response.text.replace("```gdscript", "").replace("```", "").strip()
+                            
+                            # 1. 執行物理覆寫 (存檔)
+                            with open(file_full_path, "w", encoding="utf-8") as f:
+                                f.write(clean_code)
+                            st.success(f"✅ {selected_file} 結構修補完成！代碼已更新。")
+                            
+                            # 2. 生成修復報告
+                            from weasyprint import HTML
+                            html_content = f"""
+                            <html>
+                                <head><style>body {{ font-family: sans-serif; padding: 25px; line-height: 1.6; }}
+                                h1 {{ color: #D4AF37; border-bottom: 2px solid #D4AF37; }}
+                                .box {{ background: #f9f9f9; padding: 15px; border-left: 5px solid #D4AF37; margin: 10px 0; }}
+                                pre {{ background: #222; color: #eee; padding: 15px; overflow: hidden; }}</style></head>
+                                <body>
+                                    <h1>結構修復報告：{selected_file}</h1>
+                                    <p><b>生成時間:</b> {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
+                                    <div class="box"><b>修復指令：</b><br>{fix_instr}</div>
+                                    <hr>
+                                    <h2>修復後代碼截圖 (前 1500 字)：</h2>
+                                    <pre>{clean_code[:1500]}</pre>
+                                    <p style="text-align: right; font-size: 12px; color: #666;">小白龍核心邏輯架構師認證</p>
+                                </body>
+                            </html>
+                            """
+                            # 執行物理生成報告
+                            HTML(string=html_content).write_pdf(custom_patch_path)
+                            st.success(f"📄 修復報告已存檔至：{custom_patch_path}")
+                            
+                            # 下載按鈕
+                            with open(custom_patch_path, "rb") as f:
+                                st.download_button("💾 下載備份報告", f, file_name=os.path.basename(custom_patch_path))
+
+                        except Exception as e:
+                            st.error(f"維修過程發生故障: {e}")
     else:
-        st.error("❌ 路徑未配置。")
+        st.error("❌ 找不到腳本路徑，請先確認 local_script_path 是否正確。")
 
 elif channel == "🔮 虛空啟示 (Oracle)":
     st.title("🔮 虛空啟示：全域架構諮詢")
@@ -646,14 +700,11 @@ elif channel == "📜 航行日誌 (Log)":
     # 🎨 視覺觀測窗：展示二姊的畫作與素材
     # =========================================================
     if os.path.exists(CURRENT_MEDIA_DIR):
-        # 抓取所有圖片格式 (PNG, JPG, WEBP)
         all_imgs = [f for f in os.listdir(CURRENT_MEDIA_DIR) if f.lower().endswith(('.png', '.jpg', '.jpeg', '.webp'))]
         if all_imgs:
             with st.expander("🎨 航道視覺觀測窗 (二姊的畫作庫)", expanded=True):
                 st.caption(f"目前存放於：{CURRENT_MEDIA_DIR}")
-                # 使用 columns 陣列排版，讓 19GB 主機負擔更輕
                 img_cols = st.columns(3)
-                # 顯示最近上傳的 6 張圖片
                 sorted_imgs = sorted(all_imgs, key=lambda x: os.path.getmtime(os.path.join(CURRENT_MEDIA_DIR, x)), reverse=True)
                 for idx, img_name in enumerate(sorted_imgs[:6]):
                     with img_cols[idx % 3]:
@@ -664,20 +715,31 @@ elif channel == "📜 航行日誌 (Log)":
     # =========================================================
     st.info(f"📂 正在監控專案：{current_p_name} | 準備進行跨城市數據彙整")
     
-    if st.button("📊 生成全專案 AI 總結報告 (整合所有 MD & 素材)"):
+    # --- 新增：報告路徑預核定 ---
+    report_dir = os.path.join(DATA_ROOT, current_p_name, "reports")
+    if not os.path.exists(report_dir):
+        os.makedirs(report_dir)
+    
+    timestamp = datetime.datetime.now().strftime('%m%d_%H%M')
+    default_log_report = os.path.join(report_dir, f"{current_p_name}_全案報告_{timestamp}.pdf")
+    
+    with st.expander("📥 報告產出設定", expanded=False):
+        custom_log_pdf_path = st.text_input("核定報告儲存路徑：", value=default_log_report)
+
+    if st.button("📊 生成全專案 AI 總結報告 (整合所有 MD & 素材)", type="primary"):
         if not FINAL_KEY:
             st.error("❌ 核心金鑰失效，請更新 API Key。")
         else:
             with st.spinner("正在打撈台北、新竹、台南發射站數據並精煉中..."):
                 all_contents = []
-                # 1. 抓取所有開發日誌 (.md)
+                # 1. 抓取日誌
                 if os.path.exists(CURRENT_LOG_DIR):
                     for log_f in sorted(os.listdir(CURRENT_LOG_DIR)):
                         if log_f.endswith(".md"):
                             with open(os.path.join(CURRENT_LOG_DIR, log_f), "r", encoding="utf-8") as f:
                                 all_contents.append(f"### 文件: {log_f}\n{f.read()}")
                 
-                # 2. 統計媒體庫狀況 (語音與圖片)
+                # 2. 媒體統計
                 if os.path.exists(CURRENT_MEDIA_DIR):
                     media_files = os.listdir(CURRENT_MEDIA_DIR)
                     waves = [f for f in media_files if f.endswith(".wav")]
@@ -686,27 +748,16 @@ elif channel == "📜 航行日誌 (Log)":
 
                 full_context = "\n\n".join(all_contents)
                 
-                # 3. AI 彙整邏輯
+                # 3. AI 彙整
                 model = genai.GenerativeModel(AI_MODEL)
-                summary_prompt = f"""
-                你是一位資深遊戲開發助手。請根據以下開發日誌與媒體紀錄，為《{current_p_name}》整理一份專業報告。
-                需包含：
-                1. 整體開發進度（特別是 Godot 腳本進展）
-                2. 視覺素材彙整（請提及二姊上傳的畫作數量與最新素材）
-                3. 各城市發射站的靈感與待辦事項清單。
-                請直接以結構化文字輸出內容。
-                
-                數據源：
-                {full_context}
-                """
+                summary_prompt = f"你是一位資深開發助手。請根據以下數據為《{current_p_name}》整理專業報告。數據源：\n{full_context}"
                 
                 try:
                     response = model.generate_content(summary_prompt)
                     ai_report = response.text
                     
-                    # 4. WeasyPrint 轉 PDF
+                    # 4. WeasyPrint 轉 PDF (使用核定後的物理路徑)
                     from weasyprint import HTML
-                    pdf_filename = f"{current_p_name}_全案報告_{datetime.datetime.now().strftime('%m%d_%H%M')}.pdf"
                     html_style = f"""
                     <html><body style="font-family: sans-serif; padding: 30px;">
                         <h1 style="color: #d4af37; border-bottom: 2px solid #d4af37;">餘燼航路：全域開發報告</h1>
@@ -716,14 +767,16 @@ elif channel == "📜 航行日誌 (Log)":
                         <p style="font-size: 10px; color: #999; margin-top: 20px;">由 小白龍 19GB 核心主機生成 | 座標：屏東九如發射站</p>
                     </body></html>
                     """
-                    HTML(string=html_style).write_pdf(pdf_filename)
+                    # 執行物理寫入
+                    HTML(string=html_style).write_pdf(custom_log_pdf_path)
+                    st.success(f"✅ 全案報告已物理歸檔：{custom_log_pdf_path}")
                     
-                    with open(pdf_filename, "rb") as f:
-                        st.download_button("💾 下載全專案總結 PDF", f, file_name=pdf_filename)
+                    with open(custom_log_pdf_path, "rb") as f:
+                        st.download_button("💾 下載 PDF 備份", f, file_name=os.path.basename(custom_log_pdf_path))
                 except Exception as e:
                     st.error(f"❌ 彙整失敗: {str(e)}")
 
-    st.markdown("---") 
+    st.markdown("---")
 
     # =========================================================
     # 2. 建立時間線 (Log 與 Audio 混合排列)
@@ -1057,48 +1110,77 @@ elif channel == "📜 航道啟示錄 (Oracle's Compass)":
                 except Exception as e:
                     st.error(f"❌ 虛空連結中斷：{str(e)}")
 
-    # --- ✨ 核心新增：📚 封存閱覽室介面 ---
+elif channel == "📚 封存圖書館 (Library)":
+    st.title("📚 舊日知識封存圖書館")
+    st.caption("🔒 模式：物理歸檔 — 存放 PDF 報告、技術手冊與世界觀設定")
     st.markdown("---")
-    st.subheader("🏛️ 封存圖書館 (The Archives)")
+
+    # 1. 定位實體路徑 (ARCHIVE_DIR 應在核心配置中已定義)
+    if not os.path.exists(ARCHIVE_DIR):
+        os.makedirs(ARCHIVE_DIR)
+
+    # =========================================================
+    # 📥 知識物資歸檔區 (路徑核定模式)
+    # =========================================================
+    with st.expander("📥 知識物資快速歸檔 (核定後存入本地)", expanded=True):
+        uploaded_lib_files = st.file_uploader(
+            "拖入要封存的 PDF、文檔或圖片", 
+            type=['pdf', 'txt', 'md', 'png', 'jpg', 'jpeg'],
+            accept_multiple_files=True,
+            key="lib_uploader"
+        )
+        
+        if uploaded_lib_files:
+            for lib_file in uploaded_lib_files:
+                st.markdown(f"**📄 偵測到物資：{lib_file.name}**")
+                
+                # 自動計算預設目標路徑
+                target_full_path = os.path.join(ARCHIVE_DIR, lib_file.name)
+                
+                # 讓架構師核定路徑 (比照齒輪重組模式)
+                col_path, col_btn = st.columns([3, 1])
+                with col_path:
+                    final_path = st.text_input(
+                        "核定物理封存路徑：", 
+                        value=target_full_path, 
+                        key=f"path_in_{lib_file.name}"
+                    )
+                with col_btn:
+                    st.write(" ") # 對齊調整
+                    if st.button("🚩 執行物理封存", key=f"btn_save_{lib_file.name}"):
+                        try:
+                            with open(final_path, "wb") as f:
+                                f.write(lib_file.getbuffer())
+                            st.success(f"已歸檔至：{lib_file.name}")
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"物理寫入失敗：{e}")
+                st.markdown("---")
+
+    # =========================================================
+    # 🏛️ 封存閱覽室介面 (展示區)
+    # =========================================================
+    st.subheader("🏛️ 封存閱覽室 (The Archives)")
+    
     if os.path.exists(ARCHIVE_DIR):
-        archived_files = sorted(os.listdir(ARCHIVE_DIR), reverse=True) # 最新排前面
+        # 抓取所有檔案並按時間排序
+        archived_files = sorted(
+            os.listdir(ARCHIVE_DIR), 
+            key=lambda x: os.path.getmtime(os.path.join(ARCHIVE_DIR, x)), 
+            reverse=True
+        )
+        
         if archived_files:
             for arch in archived_files:
-                col_name, col_btn = st.columns([3, 1])
-                col_name.write(f"📜 **{arch}**")
                 file_full_path = os.path.join(ARCHIVE_DIR, arch)
-                with open(file_full_path, "rb") as f:
-                    col_btn.download_button("讀取", f, file_name=arch, key=f"read_{arch}")
-        else:
-            st.caption("⚓ 目前圖書館尚無封存紀錄。")
-            # 4. 🛰️ 虛空定標：模型可用性診斷 (徹底解決 404)
-    st.divider()
-    st.subheader("🛰️ 虛空定標診斷")
-    st.caption("當出現 404 錯誤時，啟動此雷達掃描當前 API Key 支援的精確模型座標。")
-    
-    if st.button("🔍 啟動全域模型掃描"):
-        # 優先抓取目前 Session 鎖定的 Key，其次才是 .env
-        ACTIVE_KEY = st.session_state.get("active_key", os.getenv("ai_key"))
-        
-        if not ACTIVE_KEY:
-            st.error("❌ 未偵測到有效金鑰，請先在側邊欄鎖定。")
-        else:
-            try:
-                with st.spinner("正在掃描虛空可用模型..."):
-                    genai.configure(api_key=ACTIVE_KEY)
-                    # 抓取所有模型清單
-                    model_list = genai.list_models()
+                if os.path.exists(file_full_path):
+                    f_size = round(os.path.getsize(file_full_path)/1024, 1)
+                    col_name, col_info, col_read = st.columns([3, 1, 1])
                     
-                    # 篩選出能產生內容的模型
-                    available = [m.name for m in model_list if 'generateContent' in m.supported_generation_methods]
+                    col_name.write(f"📜 **{arch}**")
+                    col_info.caption(f"💾 {f_size} KB")
                     
-                    if available:
-                        st.success(f"✅ 掃描完成！發現 {len(available)} 個可用航道：")
-                        for m in available:
-                            # 用 code 格式方便妳直接複製正確名稱
-                            st.code(m)
-                        st.info("💡 複製上方包含 'flash' 的完整名稱（例如 models/gemini-1.5-flash-latest），貼回 model_map 的 Value 中。")
-                    else:
-                        st.warning("⚠️ 掃描完成，但此 Key 似乎沒有生成內容的權限。")
-            except Exception as e:
-                st.error(f"❌ 掃描崩潰：{str(e)}")
+                    with open(file_full_path, "rb") as f:
+                        col_read.download_button("📖 讀取", f, file_name=arch, key=f"read_{arch}")
+        else:
+            st.info("⚓ 目前圖書館尚無封存紀錄。")
