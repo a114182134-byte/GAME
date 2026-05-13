@@ -946,14 +946,14 @@ elif channel == "📚 封存圖書館 (Library)":
     st.caption("🔒 模式：物理歸檔 — 存放 PDF 報告、技術手冊與世界觀設定")
     st.markdown("---")
 
-    # 1. 定位實體路徑 (ARCHIVE_DIR 應在核心配置中已定義)
+    # 1. 定位實體路徑
     if not os.path.exists(ARCHIVE_DIR):
         os.makedirs(ARCHIVE_DIR)
 
     # =========================================================
-    # 📥 知識物資歸檔區 (路徑核定模式)
+    # 📥 知識物資歸檔區 (保持不變)
     # =========================================================
-    with st.expander("📥 知識物資快速歸檔 (核定後存入本地)", expanded=True):
+    with st.expander("📥 知識物資快速歸檔 (核定後存入本地)", expanded=False):
         uploaded_lib_files = st.file_uploader(
             "拖入要封存的 PDF、文檔或圖片", 
             type=['pdf', 'txt', 'md', 'png', 'jpg', 'jpeg'],
@@ -964,20 +964,12 @@ elif channel == "📚 封存圖書館 (Library)":
         if uploaded_lib_files:
             for lib_file in uploaded_lib_files:
                 st.markdown(f"**📄 偵測到物資：{lib_file.name}**")
-                
-                # 自動計算預設目標路徑
                 target_full_path = os.path.join(ARCHIVE_DIR, lib_file.name)
-                
-                # 讓架構師核定路徑 (比照齒輪重組模式)
                 col_path, col_btn = st.columns([3, 1])
                 with col_path:
-                    final_path = st.text_input(
-                        "核定物理封存路徑：", 
-                        value=target_full_path, 
-                        key=f"path_in_{lib_file.name}"
-                    )
+                    final_path = st.text_input("核定物理封存路徑：", value=target_full_path, key=f"path_in_{lib_file.name}")
                 with col_btn:
-                    st.write(" ") # 對齊調整
+                    st.write(" ")
                     if st.button("🚩 執行物理封存", key=f"btn_save_{lib_file.name}"):
                         try:
                             with open(final_path, "wb") as f:
@@ -989,28 +981,81 @@ elif channel == "📚 封存圖書館 (Library)":
                 st.markdown("---")
 
     # =========================================================
-    # 🏛️ 封存閱覽室介面 (展示區)
+    # 🔮 虛空文獻諮詢 (新加入：圖書館問答功能)
+    # =========================================================
+    st.subheader("🔮 虛空文獻諮詢")
+    st.caption("向圖書館投射疑問，AI 將翻閱所有封存 PDF 並從舊日啟示中尋找答案。")
+    
+    col_ask, col_go = st.columns([4, 1])
+    with col_ask:
+        archive_query = st.text_input("輸入疑問：", placeholder="例如：之前的魚叉系統進化建議是什麼？", label_visibility="collapsed")
+    with col_go:
+        start_search = st.button("🔍 執行打撈", use_container_width=True)
+
+    if start_search:
+        if not archive_query:
+            st.warning("請先輸入疑問。")
+        elif not os.getenv("ai_key"):
+            st.error("❌ 缺少 API Key，無法呼喚圖書館守護靈。")
+        else:
+            with st.spinner("正在快速翻閱圖書館 PDF 文獻..."):
+                all_pdf_texts = []
+                if os.path.exists(ARCHIVE_DIR):
+                    for f_name in os.listdir(ARCHIVE_DIR):
+                        if f_name.endswith(".pdf"):
+                            pdf_path = os.path.join(ARCHIVE_DIR, f_name)
+                            try:
+                                with open(pdf_path, "rb") as f:
+                                    reader = PyPDF2.PdfReader(f)
+                                    # 每一份 PDF 提取前 5 頁內容以節省資源
+                                    content = f"\n[文獻：{f_name}]\n"
+                                    for i in range(min(len(reader.pages), 5)):
+                                        content += reader.pages[i].extract_text()
+                                    all_pdf_texts.append(content)
+                            except:
+                                pass # 略過毀損檔案
+                
+                if not all_pdf_texts:
+                    st.info("⚓ 圖書館目前尚無可供解析的 PDF 文獻。")
+                else:
+                    try:
+                        # 呼喚 AI 並注入文獻 Context
+                        model = genai.GenerativeModel(AI_MODEL)
+                        context_str = "\n".join(all_pdf_texts)
+                        prompt = f"""
+                        你是一位管理《{current_p_name}》圖書館的守護靈。
+                        架構師「小白龍」正在查詢舊日文獻。
+                        
+                        以下是圖書館內部的文獻碎片：
+                        {context_str}
+                        
+                        請根據以上文獻回答：{archive_query}
+                        如果文獻中沒有提到，請以守護靈的身份給予建議，並說明這不在現有紀錄中。
+                        """
+                        response = model.generate_content(prompt)
+                        st.markdown(f"### 📖 圖書館啟示錄\n\n{response.text}")
+                        st.markdown("---")
+                    except Exception as e:
+                        st.error(f"虛空連結中斷：{e}")
+
+    # =========================================================
+    # 🏛️ 封存閱覽室介面 (展示區 - 保持不變)
     # =========================================================
     st.subheader("🏛️ 封存閱覽室 (The Archives)")
-    
     if os.path.exists(ARCHIVE_DIR):
-        # 抓取所有檔案並按時間排序
         archived_files = sorted(
             os.listdir(ARCHIVE_DIR), 
             key=lambda x: os.path.getmtime(os.path.join(ARCHIVE_DIR, x)), 
             reverse=True
         )
-        
         if archived_files:
             for arch in archived_files:
                 file_full_path = os.path.join(ARCHIVE_DIR, arch)
                 if os.path.exists(file_full_path):
                     f_size = round(os.path.getsize(file_full_path)/1024, 1)
                     col_name, col_info, col_read = st.columns([3, 1, 1])
-                    
                     col_name.write(f"📜 **{arch}**")
                     col_info.caption(f"💾 {f_size} KB")
-                    
                     with open(file_full_path, "rb") as f:
                         col_read.download_button("📖 讀取", f, file_name=arch, key=f"read_{arch}")
         else:
