@@ -814,158 +814,7 @@ elif channel == "📜 航行日誌 (Log)":
     st.markdown("---")
     
     # [後續建立時間線的代碼維持不變...]
-elif channel == "⚙️ 核心維護 (System)":
-    st.title("⚙️ 核心動力室維護")
-    st.markdown("---")
-    
-    # 1. 燃料庫 (.env) 配置：直接物理寫入 Token 與 Key
-    with st.expander("🔑 燃料庫 (.env) 配置"):
-        st.info("若顯示『未配置 github_token』，請在此輸入並點擊物理寫入。")
-        # 讀取當前環境變數
-        curr_ai = os.getenv("ai_key", "")
-        curr_gh = os.getenv("github_token", "")
-        
-        new_ai = st.text_input("填入 ai_key", value=curr_ai, type="password")
-        new_gh = st.text_input("填入 github_token", value=curr_gh, type="password")
-        
-        if st.button("🚀 物理寫入 .env 燃料庫"):
-            # 直接寫入檔案以確保持久化
-            with open(BASE_PATH / ".env", "w", encoding="utf-8") as f:
-                f.write(f"ai_key={new_ai}\ngithub_token={new_gh}\n")
-            # 同步更新當前運行的環境變數，避免重啟
-            os.environ["ai_key"] = new_ai
-            os.environ["github_token"] = new_gh
-            st.success("✅ 燃料庫已重新注入，環境變數已即時刷新！")
 
-    # 2. 專案修改、新增與刪除
-    with st.expander("📝 專案架構管理"):
-        st.subheader(f"當前專案：{current_p_name}")
-        
-        # 修改當前專案路徑
-        new_path = st.text_input("Godot 腳本資料夾路徑", config.get("local_script_path", ""))
-        new_prompt = st.text_area("AI 架構師公約 (System Prompt)", config.get("prompt", ""))
-        
-        if st.button("💾 儲存專案修改"):
-            PROJECTS[current_p_name]["local_script_path"] = new_path
-            PROJECTS[current_p_name]["prompt"] = new_prompt
-            save_config(PROJECTS)
-            st.success("專案設定已同步至 projects_config.json")
-
-        st.divider()
-        
-        # 新增專案
-        new_p_name = st.text_input("➕ 建立新專案名稱")
-        if st.button("🏗️ 啟動新專案架構"):
-            if new_p_name and new_p_name not in PROJECTS:
-                PROJECTS[new_p_name] = {
-                    "theme_color": "#D4AF37", 
-                    "bg_color": "#1A1A1A", 
-                    "prompt": "你是架構師", 
-                    "local_script_path": "", 
-                    "keys_list": []
-                }
-                save_config(PROJECTS)
-                st.rerun()
-        
-# 刪除專案 (危險區 - 增加雙重鎖定)
-        st.divider()
-        
-        # 使用 expander 把危險功能收納起來，避免誤觸
-        with st.expander("🚨 危險區域：專案物理拆解"):
-            st.warning(f"注意：此操作將物理刪除「{current_p_name}」所有資料夾與配置，且無法復原。")
-            
-            # 認證碼輸入框
-            confirm_input = st.text_input(
-                "請輸入專案名稱以解鎖刪除按鈕：", 
-                placeholder=current_p_name,
-                help="這是在執行物理刪除前的最後安全驗證"
-            )
-
-            # 只有認證碼正確，刪除按鈕才可被點擊 (disabled 邏輯)
-            is_verified = (confirm_input == current_p_name)
-            
-            if st.button(
-                f"🔥 確認物理刪除：{current_p_name}", 
-                type="primary", 
-                disabled=not is_verified,
-                use_container_width=True
-            ):
-                if len(PROJECTS) > 1:
-                    # 1. 從配置中移除
-                    del PROJECTS[current_p_name]
-                    save_config(PROJECTS)
-                    
-                    # 2. 物理刪除實體資料夾
-                    project_dir = os.path.join(DATA_ROOT, current_p_name)
-                    if os.path.exists(project_dir):
-                        shutil.rmtree(project_dir, ignore_errors=True)
-                    
-                    st.toast(f"🚩 專案【{current_p_name}】已從磁區中徹底抹除", icon="🗑️")
-                    st.rerun()
-                else:
-                    st.error("🚨 核心協議：必須保留至少一個運作中的專案。")
-            
-            if confirm_input and not is_verified:
-                st.caption("⚠️ 認證名稱不匹配，刪除系統已鎖定。")
-
-    st.divider()
-    
-    # 3. 雲端進化同步 (Git Push)
-    st.subheader("🚀 雲端進化同步 (Git Push)")
-    
-    # 檢查 Token 狀態
-    if not os.getenv("github_token"):
-        st.error("⚠️ 偵測不到 GitHub Token，同步功能已鎖定。")
-    
-    commit_msg = st.text_input("進化紀錄訊息 (Commit Message)", 
-                             value=f"v{datetime.datetime.now().strftime('%m%d')} 小白龍架構進化")
-    
-    if st.button("🔥 啟動全域同步"):
-        if not os.getenv("github_token"):
-            st.error("請先在上方寫入 github_token")
-        else:
-            with st.spinner("正在穿越虛空同步至 GitHub..."):
-                # 執行自癒型同步函數
-                success, msg = secure_auto_push(commit_msg)
-                if success:
-                    st.success(msg)
-                else:
-                    st.error(msg)
-                    # 4. 🛰️ 虛空定標：模型可用性診斷 (解決 404 問題)
-    st.divider()
-    st.subheader("🛰️ 虛空定標診斷")
-    st.caption("當出現 404 錯誤時，請啟動此雷達掃描當前 API Key 支援的精確模型名稱。")
-    
-    if st.button("🔍 啟動全域模型掃描"):
-        # 確保使用當前鎖定的金鑰
-        ACTIVE_KEY = st.session_state.get("active_key", os.getenv("ai_key"))
-        
-        if not ACTIVE_KEY:
-            st.error("❌ 未偵測到有效金鑰，請先在側邊欄鎖定或在 .env 寫入。")
-        else:
-            try:
-                with st.spinner("正在掃描虛空可用模型..."):
-                    genai.configure(api_key=ACTIVE_KEY)
-                    models = genai.list_models()
-                    
-                    # 篩選出支援生成內容的模型
-                    available_models = [
-                        m.name for m in models 
-                        if 'generateContent' in m.supported_generation_methods
-                    ]
-                    
-                    if available_models:
-                        st.success(f"✅ 掃描完成！發現 {len(available_models)} 個可用航道：")
-                        for m in available_models:
-                            # 用 code 格式方便妳直接複製
-                            st.code(m)
-                        
-                        st.info("💡 提示：請複製清單中的名稱（包含 models/ 前綴），更新至 model_map 中。")
-                    else:
-                        st.warning("⚠️ 掃描完成，但此金鑰似乎不具備任何內容生成權限。")
-            except Exception as e:
-                st.error(f"❌ 掃描程序崩潰：{str(e)}")
-                st.info("💡 這通常代表金鑰無效或網路環境（九如節點）連結不穩。")
 elif channel == "📜 航道啟示錄 (Oracle's Compass)":
     st.title("📜 航道啟示錄 (Oracle's Compass)")
     st.caption("⚓ 當妳在迷霧中失去方向，請轉動此羅盤，聽取虛空的殘響。")
@@ -1166,3 +1015,139 @@ elif channel == "📚 封存圖書館 (Library)":
                         col_read.download_button("📖 讀取", f, file_name=arch, key=f"read_{arch}")
         else:
             st.info("⚓ 目前圖書館尚無封存紀錄。")
+elif channel == "⚙️ 核心維護 (System)":
+    st.title("⚙️ 核心動力室維護")
+    st.caption("管理母站燃料、專案架構及遠端進化協定。")
+    st.markdown("---")
+    
+    # 1. 燃料庫 (.env) 配置
+    with st.expander("🔑 燃料庫 (.env) 配置"):
+        st.info("若顯示『未配置 github_token』，請在此輸入並點擊物理寫入。")
+        curr_ai = os.getenv("ai_key", "")
+        curr_gh = os.getenv("github_token", "")
+        
+        new_ai = st.text_input("填入 ai_key", value=curr_ai, type="password")
+        new_gh = st.text_input("填入 github_token", value=curr_gh, type="password")
+        
+        if st.button("🚀 物理寫入 .env 燃料庫"):
+            with open(BASE_PATH / ".env", "w", encoding="utf-8") as f:
+                f.write(f"ai_key={new_ai}\ngithub_token={new_gh}\n")
+            os.environ["ai_key"] = new_ai
+            os.environ["github_token"] = new_gh
+            st.success("✅ 燃料庫已重新注入，環境變數已即時刷新！")
+
+    # 2. 🚀 遠端邏輯同步 (GitHub Sync) - 新增進化區塊
+    with st.expander("🚀 遠端邏輯同步 (GitHub Sync)", expanded=True):
+        st.info("從 GitHub 遠端倉庫打撈最新代碼，直接物理覆寫母站核心。")
+        
+        sync_repo = st.text_input("遠端倉庫位址 (格式: 用戶名/倉庫名)", value="zzz961011/Your_Repo_Name")
+        sync_branch = st.text_input("目標分支", value="main")
+        
+        if st.button("🔥 啟動核心邏輯物理同步", use_container_width=True):
+            gh_token = os.getenv("github_token")
+            if not gh_token:
+                st.error("❌ 缺少 github_token，無法穿越虛空同步。")
+            else:
+                with st.spinner("正在連接 GitHub 衛星，準備重新鍛造核心..."):
+                    try:
+                        # 構造 API URL 獲取 master_hub.py 的內容
+                        api_url = f"https://api.github.com/repos/{sync_repo}/contents/master_hub.py?ref={sync_branch}"
+                        headers = {"Authorization": f"token {gh_token}"}
+                        
+                        resp = requests.get(api_url, headers=headers)
+                        if resp.status_code == 200:
+                            # 獲取下載連結並下載最新代碼
+                            download_url = resp.json().get("download_url")
+                            new_code = requests.get(download_url).text
+                            
+                            # 物理覆寫：自己改寫自己 (__file__ 指向當前執行的 py 檔)
+                            with open(__file__, "w", encoding="utf-8") as f:
+                                f.write(new_code)
+                            
+                            st.success("✅ 核心邏輯同步完成！母站正在重新啟動進化...")
+                            st.balloons()
+                            st.rerun()
+                        else:
+                            st.error(f"同步失敗：HTTP {resp.status_code} (請檢查路徑與權限)")
+                    except Exception as e:
+                        st.error(f"❌ 同步過程發生物理故障: {e}")
+
+    # 3. 專案修改、新增與刪除
+    with st.expander("📝 專案架構管理"):
+        st.subheader(f"當前專案：{current_p_name}")
+        new_path = st.text_input("Godot 腳本資料夾路徑", config.get("local_script_path", ""))
+        new_prompt = st.text_area("AI 架構師公約 (System Prompt)", config.get("prompt", ""))
+        
+        if st.button("💾 儲存專案修改"):
+            PROJECTS[current_p_name]["local_script_path"] = new_path
+            PROJECTS[current_p_name]["prompt"] = new_prompt
+            save_config(PROJECTS)
+            st.success("專案設定已同步至 projects_config.json")
+
+        st.divider()
+        new_p_name = st.text_input("➕ 建立新專案名稱")
+        if st.button("🏗️ 啟動新專案架構"):
+            if new_p_name and new_p_name not in PROJECTS:
+                PROJECTS[new_p_name] = {
+                    "theme_color": "#D4AF37", "bg_color": "#1A1A1A", 
+                    "prompt": "你是架構師", "local_script_path": "", "keys_list": []
+                }
+                save_config(PROJECTS)
+                st.rerun()
+        
+        st.divider()
+        with st.expander("🚨 危險區域：專案物理拆解"):
+            st.warning(f"注意：此操作將物理刪除「{current_p_name}」所有資料夾與配置。")
+            confirm_input = st.text_input("請輸入專案名稱以解鎖刪除：", placeholder=current_p_name)
+            is_verified = (confirm_input == current_p_name)
+            
+            if st.button(f"🔥 確認物理刪除：{current_p_name}", type="primary", disabled=not is_verified, use_container_width=True):
+                if len(PROJECTS) > 1:
+                    del PROJECTS[current_p_name]
+                    save_config(PROJECTS)
+                    project_dir = os.path.join(DATA_ROOT, current_p_name)
+                    if os.path.exists(project_dir):
+                        shutil.rmtree(project_dir, ignore_errors=True)
+                    st.toast(f"🚩 專案【{current_p_name}】已徹底抹除", icon="🗑️")
+                    st.rerun()
+                else:
+                    st.error("🚨 核心協議：必須保留至少一個運作中的專案。")
+
+    st.divider()
+    
+    # 4. 雲端進化同步 (Git Push)
+    st.subheader("🚀 雲端進化同步 (Git Push)")
+    if not os.getenv("github_token"):
+        st.error("⚠️ 偵測不到 GitHub Token，同步功能已鎖定。")
+    
+    commit_msg = st.text_input("進化紀錄訊息 (Commit Message)", 
+                               value=f"v{datetime.datetime.now().strftime('%m%d')} 小白龍架構進化")
+    
+    if st.button("🔥 啟動全域同步 (Push)"):
+        if not os.getenv("github_token"):
+            st.error("請先在上方寫入 github_token")
+        else:
+            with st.spinner("正在穿越虛空同步至 GitHub..."):
+                success, msg = secure_auto_push(commit_msg)
+                if success: st.success(msg)
+                else: st.error(msg)
+
+    # 5. 🛰️ 虛空定標診斷
+    st.divider()
+    st.subheader("🛰️ 虛空定標診斷")
+    if st.button("🔍 啟動全域模型掃描"):
+        ACTIVE_KEY = st.session_state.get("active_key", os.getenv("ai_key"))
+        if not ACTIVE_KEY:
+            st.error("❌ 未偵測到有效金鑰。")
+        else:
+            try:
+                with st.spinner("正在掃描虛空可用模型..."):
+                    genai.configure(api_key=ACTIVE_KEY)
+                    available_models = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
+                    if available_models:
+                        st.success(f"✅ 掃描完成！")
+                        for m in available_models: st.code(m)
+                    else:
+                        st.warning("⚠️ 此金鑰無生成權限。")
+            except Exception as e:
+                st.error(f"❌ 掃描程序崩潰：{str(e)}")
