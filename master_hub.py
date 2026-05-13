@@ -1020,7 +1020,7 @@ elif channel == "⚙️ 核心維護 (System)":
     st.caption("管理母站燃料、專案架構及遠端進化協定。")
     st.markdown("---")
     
-    # 1. 燃料庫 (.env) 配置
+    # 1. 燃料庫 (.env) 配置 (保持不變)
     with st.expander("🔑 燃料庫 (.env) 配置"):
         st.info("若顯示『未配置 github_token』，請在此輸入並點擊物理寫入。")
         curr_ai = os.getenv("ai_key", "")
@@ -1036,31 +1036,41 @@ elif channel == "⚙️ 核心維護 (System)":
             os.environ["github_token"] = new_gh
             st.success("✅ 燃料庫已重新注入，環境變數已即時刷新！")
 
-    # 2. 🚀 遠端邏輯同步 (GitHub Sync) - 新增進化區塊
+    # 2. 🚀 遠端邏輯同步 (GitHub Sync) - 固定路徑版
     with st.expander("🚀 遠端邏輯同步 (GitHub Sync)", expanded=True):
         st.info("從 GitHub 遠端倉庫打撈最新代碼，直接物理覆寫母站核心。")
         
-        sync_repo = st.text_input("遠端倉庫位址 (格式: 用戶名/倉庫名)", value="zzz961011/Your_Repo_Name")
-        sync_branch = st.text_input("目標分支", value="main")
+        # 從專案設定中讀取已存的路徑，若無則預設為空
+        saved_repo = PROJECTS[current_p_name].get("github_repo", "")
+        saved_branch = PROJECTS[current_p_name].get("github_branch", "main")
         
+        sync_repo = st.text_input("遠端倉庫位址 (格式: 用戶名/倉庫名)", value=saved_repo, placeholder="zzz961011/Your_Repo_Name")
+        sync_branch = st.text_input("目標分支", value=saved_branch)
+        
+        # 新增一個儲存路徑的按鈕，避免每次都要重打
+        if st.button("📌 固定此倉庫路徑"):
+            PROJECTS[current_p_name]["github_repo"] = sync_repo
+            PROJECTS[current_p_name]["github_branch"] = sync_branch
+            save_config(PROJECTS)
+            st.success(f"✅ 座標已定標！下次進入【{current_p_name}】將自動載入此路徑。")
+
+        st.divider()
+
         if st.button("🔥 啟動核心邏輯物理同步", use_container_width=True):
             gh_token = os.getenv("github_token")
-            if not gh_token:
-                st.error("❌ 缺少 github_token，無法穿越虛空同步。")
+            if not gh_token or not sync_repo:
+                st.error("❌ 缺少 token 或倉庫路徑，無法穿越虛空。")
             else:
                 with st.spinner("正在連接 GitHub 衛星，準備重新鍛造核心..."):
                     try:
-                        # 構造 API URL 獲取 master_hub.py 的內容
                         api_url = f"https://api.github.com/repos/{sync_repo}/contents/master_hub.py?ref={sync_branch}"
                         headers = {"Authorization": f"token {gh_token}"}
                         
                         resp = requests.get(api_url, headers=headers)
                         if resp.status_code == 200:
-                            # 獲取下載連結並下載最新代碼
                             download_url = resp.json().get("download_url")
                             new_code = requests.get(download_url).text
                             
-                            # 物理覆寫：自己改寫自己 (__file__ 指向當前執行的 py 檔)
                             with open(__file__, "w", encoding="utf-8") as f:
                                 f.write(new_code)
                             
