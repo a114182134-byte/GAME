@@ -3,6 +3,8 @@ import streamlit as st
 import os
 import requests
 import google.generativeai as genai
+import vertexai  
+from vertexai.preview.vision_models import ImageGenerationModel
 import subprocess
 import datetime
 import random
@@ -155,6 +157,36 @@ def secure_auto_push(commit_message):
 
     except Exception as e:
         return False, f"❌ 系統自癒失敗: {str(e)}"
+# --- 側邊欄：虛空定標配置 ---
+st.sidebar.markdown("---")
+st.sidebar.subheader("🌌 虛空定標配置")
+
+# 使用 session_state 保留 ID，避免重新整理時消失
+if "gcp_project_id" not in st.session_state:
+    st.session_state.gcp_project_id = ""
+
+# 建立輸入框
+gcp_id = st.sidebar.text_input(
+    "GCP Project ID", 
+    value=st.session_state.gcp_project_id, 
+    placeholder="例如: my-project-1234",
+    help="請輸入妳在 Google Cloud 控制台看到的 Project ID"
+)
+
+# 狀態更新與初始化
+if gcp_id:
+    st.session_state.gcp_project_id = gcp_id
+    try:
+        import vertexai
+        # 動態初始化：只要輸入 ID，系統就自動嘗試連線
+        vertexai.init(project=gcp_id, location="us-central1")
+        st.sidebar.success("✅ 座標定位成功 (ADC 模式)")
+        VERTEX_READY = True
+    except Exception as e:
+        st.sidebar.error(f"❌ 定位失敗: {e}")
+        VERTEX_READY = False
+else:
+    VERTEX_READY = False
 
 # --- 4. 啟動系統 ---
 # 確保每次執行都會抓到最新的專案狀態
@@ -249,6 +281,9 @@ for d in [LOG_DIR, MEDIA_DIR, ARCHIVE_DIR]:
     if not os.path.exists(d): 
         os.makedirs(d)
         print(f"🛠️ 物理空間已重構：{d}")
+# =========================================================
+    # 📸 頻道：素材打撈 (Media) - 整合 Vertex AI Imagen 3
+    # =========================================================
 if channel == "📸 素材打撈 (Media)":
     st.title("📸 殘留影像與波形打撈")
     st.markdown("---")
@@ -259,14 +294,15 @@ if channel == "📸 素材打撈 (Media)":
     
     col_loc, col_info = st.columns([1, 2])
     with col_loc:
-        # 地點選擇，影響後續所有存檔的前綴
         station_origin = st.selectbox("📍 當前發射站", ["總部 (acer)", "台北站", "新竹站", "台南站"])
     with col_info:
         st.caption(f"📡 偵測設備類型：`{dev_type}`")
         st.caption(f"🌍 接入網址：`{st.context.headers.get('Host')}`")
 
-    # 1. 指令輸入區域
-    u_text = st.text_area("🧠 分析指令 (或用語音輸入後自動填充)", placeholder="描述你的開發需求、二姊的畫作靈感...", help="這些文字會連同媒體一起交給 AI 處理。")
+    # 1. 指令輸入區域 (此欄位同時供 AI 分析與 Imagen 3 繪圖使用)
+    u_text = st.text_area("🧠 指令核心 / 靈感咒語", 
+                            placeholder="描述開發需求、畫作靈感，或輸入繪圖咒語（例如：黃銅風格的蒸汽機械鯨魚）...", 
+                            help="輸入文字後，可點擊下方的『AI 思考』或『虛空重塑』。")
     
     st.subheader("🎤 語音靈感捕捉")
     from audio_recorder_streamlit import audio_recorder
@@ -278,86 +314,71 @@ if channel == "📸 素材打撈 (Media)":
         icon_size="2x",
     )
 
-    # ---------------------------------------------------------
-    # ⚡ [自動入庫監聽器] - 錄音攔截
-    # ---------------------------------------------------------
+    # [自動入庫監聽器] - 錄音攔截
     if audio_bytes:
         if "last_mic_data" not in st.session_state or st.session_state.last_mic_data != audio_bytes:
             timestamp = datetime.datetime.now().strftime('%m%d_%H%M%S')
             mic_name = f"mic_{station_origin}_{timestamp}.wav"
             mic_path = os.path.join(MEDIA_DIR, mic_name)
-            
             with open(mic_path, "wb") as f:
                 f.write(audio_bytes)
-            
             st.session_state.last_mic_data = audio_bytes 
-            st.session_state.current_mic_path = mic_path
             st.sidebar.success(f"🎙️ 聲波已從 {station_origin} 入庫")
-
-        st.write(f"🎵 來自 **{station_origin}** 的即時聲波：")
         st.audio(audio_bytes, format="audio/wav")
 
     st.divider()
     
-    # 2. 檔案上傳區 (核心改進：強化圖片存檔與預覽)
-    col1, col2 = st.columns(2)
-    with col1:
+    # 2. 檔案上傳區
+    col_up1, col_up2 = st.columns(2)
+    with col_up1:
         u_img = st.file_uploader("🖼️ 影像打撈 (二姊的畫作)", type=['png', 'jpg', 'jpeg', 'webp'])
         if u_img:
-            # 檔名處理：[地點]_[原始檔名]
             img_filename = f"{station_origin}_{u_img.name}"
             img_path = os.path.join(MEDIA_DIR, img_filename)
-            
             from PIL import Image
             img = Image.open(u_img)
-            st.image(img, caption="🚀 待上傳影像預覽", use_column_width=True)
-            
+            st.image(img, caption="🚀 待處理影像預覽", use_column_width=True)
             if not os.path.exists(img_path):
                 img.save(img_path)
-                st.sidebar.success(f"🖼️ 影像已存入 {station_origin} 倉庫")
+                st.sidebar.success(f"🖼️ 影像已存入倉庫")
 
-    with col2:
-        u_audio = st.file_uploader("🎵 音訊打撈 (BGM/音樂素材)", type=['mp3', 'wav', 'ogg', 'm4a'])
+    with col_up2:
+        u_audio = st.file_uploader("🎵 音訊打撈 (BGM/素材)", type=['mp3', 'wav', 'ogg', 'm4a'])
         if u_audio:
             audio_filename = f"{station_origin}_{u_audio.name}"
             a_path = os.path.join(MEDIA_DIR, audio_filename)
             if not os.path.exists(a_path):
                 with open(a_path, "wb") as f:
                     f.write(u_audio.getbuffer())
-                st.sidebar.success(f"🎵 音訊已存入 {station_origin} 倉庫")
+                st.sidebar.success(f"🎵 音訊已入庫")
             st.audio(u_audio)
 
     st.markdown("---")
     
-    # 3. 執行 AI 分析按鈕 (強化日誌連結能力)
-    if st.button("🚀 啟動跨模態解析 (AI 思考)"):
+    # 3. 雙核心處理按鈕
+    col_btn1, col_btn2 = st.columns(2)
+    
+    with col_btn1:
+        analyze_btn = st.button("🚀 啟動跨模態解析 (AI 思考)", use_container_width=True, help="分析現有圖片、語音或文字並產生紀錄。")
+    
+    with col_btn2:
+        draw_btn = st.button("🎨 請求虛空重塑 (Imagen 3)", use_container_width=True, help="使用 Vertex AI 生成全新影像。")
+
+    # --- 邏輯處理 A：Gemini 多模態分析 ---
+    if analyze_btn:
         if not (u_img or u_audio or u_text or audio_bytes):
-            st.warning("📡 偵測不到感測器數據，請先提供素材或錄音。")
+            st.warning("📡 偵測不到感測器數據，請先提供素材。")
         else:
             with st.spinner(f"正在連線至 {station_origin} 進行解析..."):
                 now = datetime.datetime.now()
                 timestamp = now.strftime('%m%d_%H%M%S')
-                log_time_str = now.strftime('%Y-%m-%d %H:%M:%S')
-                
                 model = genai.GenerativeModel(AI_MODEL)
                 content_payload = []
                 
-                # 處理上傳的圖片
-                img_ref_name = "無"
-                if u_img:
-                    img_ref_name = f"{station_origin}_{u_img.name}"
-                    img = Image.open(u_img)
-                    content_payload.append(img)
-                
-                # 處理即時語音
-                mic_ref_name = f"mic_{station_origin}_{timestamp}.wav" if audio_bytes else "無"
-                if audio_bytes:
-                    content_payload.append({"mime_type": "audio/wav", "data": audio_bytes})
-                
-                # 處理上傳音訊
-                audio_ref_name = f"{station_origin}_{u_audio.name}" if u_audio else "無"
-                if u_audio:
-                    u_audio.seek(0) # 重新讀取
+                if u_img: content_payload.append(Image.open(u_img))
+                if audio_bytes: content_payload.append({"mime_type": "audio/wav", "data": audio_bytes})
+                if u_audio: 
+                    u_audio.seek(0)
                     content_payload.append({"mime_type": u_audio.type, "data": u_audio.read()})
 
                 final_prompt = u_text if u_text else "請分析以上媒體內容並整理成日誌。"
@@ -369,25 +390,52 @@ if channel == "📸 素材打撈 (Media)":
                         st.markdown(f"### 📝 AI 綜合分析報告 (來源：{station_origin})")
                         st.write(response.text)
                         
-                        # --- 核心邏輯：寫入航行日誌 (關鍵在於寫入檔名，日誌頻道才能自動顯像) ---
+                        # 寫入日誌
                         log_file = os.path.join(LOG_DIR, f"log_{timestamp}.md")
                         with open(log_file, "a", encoding="utf-8") as f:
-                            f.write(f"# 航行紀錄 - {log_time_str}\n\n")
-                            f.write(f"### 📍 來源發射站：{station_origin} ({dev_type})\n")
-                            f.write(f"- **指令核心**: {u_text if u_text else '自動感測'}\n")
-                            
-                            # 寫入這幾行，日誌頻道就能自動播放音訊和顯示二姊的圖
-                            if u_img: f.write(f"- **關聯影像**: {img_ref_name}\n")
-                            if audio_bytes: f.write(f"- **關聯語音**: {mic_ref_name}\n")
-                            if u_audio: f.write(f"- **關聯音訊**: {audio_ref_name}\n")
-                            
+                            f.write(f"# 航行紀錄 - {now.strftime('%Y-%m-%d %H:%M:%S')}\n\n")
+                            f.write(f"### 📍 來源發射站：{station_origin}\n")
+                            if u_img: f.write(f"- **關聯影像**: {station_origin}_{u_img.name}\n")
                             f.write(f"\n#### 🧠 AI 解析結果\n{response.text}\n")
-                            f.write("\n---\n")
                         st.success(f"✅ 日誌已寫入：log_{timestamp}.md")
-                    else:
-                        st.info("⚠️ 檔案已物理存檔，但 API Key 未配置。")
                 except Exception as e:
                     st.error(f"❌ 解析引擎異常: {str(e)}")
+
+    # --- 邏輯 B：Vertex AI Imagen 3 生成 (動態 ID 版) ---
+        if draw_btn:
+            # 檢查是否有輸入 ID
+            current_id = st.session_state.get("gcp_project_id")
+            
+            if not current_id:
+                st.warning("⚠️ 虛空航道未定位！請先在側邊欄輸入『GCP Project ID』。")
+            elif not u_text:
+                st.warning("🔮 缺少咒語！請在『🧠 指令核心』輸入描述。")
+            else:
+                with st.spinner("正在調動 Vertex AI 進行物理重塑..."):
+                    try:
+                        from vertexai.preview.vision_models import ImageGenerationModel
+                        
+                        # 直接呼叫模型 (前提是側邊欄已成功執行 vertexai.init)
+                        imagen_model = ImageGenerationModel.from_pretrained("imagen-3.0-generate-001")
+                        
+                        full_prompt = f"Style: Brass steampunk, post-apocalyptic. Subject: {u_text}"
+                        
+                        images = imagen_model.generate_images(
+                            prompt=full_prompt,
+                            number_of_images=1,
+                            aspect_ratio="1:1"
+                        )
+                        
+                        if images:
+                            timestamp = datetime.datetime.now().strftime('%m%d_%H%M%S')
+                            img_name = f"reborn_{station_origin}_{timestamp}.png"
+                            img_path = os.path.join(MEDIA_DIR, img_name)
+                            images[0].save(location=img_path, include_generation_parameters=False)
+                            
+                            st.image(img_path, caption=f"✨ 虛空重塑完成：{u_text}")
+                            st.sidebar.success(f"🎨 影像已入庫")
+                    except Exception as e:
+                        st.error(f"❌ 影像重塑失敗：{str(e)}")
 
 elif channel == "🔧 齒輪重組 (Script)":
     st.title("🔧 邏輯齒輪精密重組")
