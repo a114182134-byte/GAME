@@ -394,42 +394,81 @@ elif channel == "🔧 齒輪重組 (Script)":
     st.caption("🔍 模式：精密重構 — 適合增加新功能、提升代碼效能與可讀性")
     st.markdown("---")
 
-    script_path = config.get("local_script_path", "")
-    if script_path and os.path.exists(script_path):
-        files = [f for f in os.listdir(script_path) if f.endswith('.gd')]
-        selected_file = st.selectbox("📂 選擇優化目標", files, key="script_select")
-        file_full_path = os.path.join(script_path, selected_file)
+    # --- 新增：外部物資打撈區 (檔案拖入) ---
+    with st.expander("📥 外部腳本快速打撈 (拖入檔案)", expanded=False):
+        uploaded_files = st.file_uploader(
+            "拖入要加入專案的腳本 (.gd, .py, .json, .txt)", 
+            type=['gd', 'py', 'json', 'txt'],
+            accept_multiple_files=True
+        )
         
-        with open(file_full_path, "r", encoding="utf-8") as f:
-            current_code = f.read()
+        script_path = config.get("local_script_path", "")
+        
+        if uploaded_files and script_path:
+            for uploaded_file in uploaded_files:
+                content = uploaded_file.read().decode("utf-8")
+                st.text(f"📄 偵測到檔案：{uploaded_file.name}")
+                
+                # 預覽與儲存按鈕
+                col1, col2 = st.columns([1, 4])
+                with col1:
+                    if st.button(f"💾 存入專案", key=f"save_upload_{uploaded_file.name}"):
+                        target_full_path = os.path.join(script_path, uploaded_file.name)
+                        with open(target_full_path, "w", encoding="utf-8") as f:
+                            f.write(content)
+                        st.success(f"已存入：{uploaded_file.name}")
+                        st.rerun() # 重新整理以更新下方選擇清單
+                with col2:
+                    st.caption(f"目標路徑：{script_path}")
 
-        col_e, col_a = st.columns([1, 1])
-        with col_e:
-            st.subheader("📝 代碼編輯器")
-            new_code = st.text_area("直接編輯並儲存", value=current_code, height=500)
-            if st.button("💾 儲存物理修改", key="save_script"):
-                with open(file_full_path, "w", encoding="utf-8") as f:
-                    f.write(new_code)
-                st.success(f"✅ {selected_file} 物理覆寫成功！")
+    st.markdown("---")
 
-        with col_a:
-            st.subheader("💡 AI 優化建議")
-            if st.button("🚀 啟動邏輯進化分析"):
-                model = genai.GenerativeModel(AI_MODEL)
-                prompt = f"你是一位資深 Godot 專家。請分析此腳本並提供重構建議，使其更符合最佳實踐，並提升效能。\n\n代碼：\n{current_code}"
-                response = model.generate_content(prompt)
-                st.markdown(response.text)
-                # 提供 PDF 導出
-                st.session_state.last_script_advice = response.text
+    # --- 原有的本地檔案編輯區 ---
+    if script_path and os.path.exists(script_path):
+        files = [f for f in os.listdir(script_path) if f.endswith('.gd') or f.endswith('.py')]
+        
+        if not files:
+            st.info("📂 資料夾中尚無腳本檔案，請拖入檔案或檢查路徑。")
+        else:
+            selected_file = st.selectbox("📂 選擇優化目標", files, key="script_select")
+            file_full_path = os.path.join(script_path, selected_file)
+            
+            with open(file_full_path, "r", encoding="utf-8") as f:
+                current_code = f.read()
 
-            if "last_script_advice" in st.session_state:
-                if st.button("📥 導出優化報告 (PDF)"):
-                    from weasyprint import HTML
-                    html = f"<h1>{selected_file} 優化建議</h1><hr>{st.session_state.last_script_advice.replace('\n', '<br>')}"
-                    HTML(string=html).write_pdf(f"Refactor_{selected_file}.pdf")
-                    st.download_button("💾 下載 PDF", open(f"Refactor_{selected_file}.pdf", "rb"), file_name=f"Refactor_{selected_file}.pdf")
+            col_e, col_a = st.columns([1, 1])
+            with col_e:
+                st.subheader("📝 代碼編輯器")
+                # 這裡改用 st.text_area 讓妳編輯
+                new_code = st.text_area("直接編輯並儲存", value=current_code, height=500)
+                if st.button("💾 儲存物理修改", key="save_script"):
+                    with open(file_full_path, "w", encoding="utf-8") as f:
+                        f.write(new_code)
+                    st.success(f"✅ {selected_file} 物理覆寫成功！")
+
+            with col_a:
+                st.subheader("💡 AI 優化建議")
+                if st.button("🚀 啟動邏輯進化分析"):
+                    model = genai.GenerativeModel(AI_MODEL)
+                    prompt = f"你是一位資深 Godot 專家。請分析此腳本並提供重構建議，使其更符合最佳實踐，並提升效能。\n\n代碼：\n{current_code}"
+                    response = model.generate_content(prompt)
+                    st.markdown(response.text)
+                    st.session_state.last_script_advice = response.text
+
+                if "last_script_advice" in st.session_state:
+                    if st.button("📥 導出優化報告 (PDF)"):
+                        # 這裡保留妳原本的 WeasyPrint 邏輯
+                        try:
+                            from weasyprint import HTML
+                            html = f"<h1>{selected_file} 優化建議</h1><hr>{st.session_state.last_script_advice.replace('\n', '<br>')}"
+                            pdf_filename = f"Refactor_{selected_file}.pdf"
+                            HTML(string=html).write_pdf(pdf_filename)
+                            with open(pdf_filename, "rb") as f:
+                                st.download_button("💾 下載 PDF", f, file_name=pdf_filename)
+                        except Exception as e:
+                            st.error(f"PDF 導出失敗，請檢查 WeasyPrint 環境：{e}")
     else:
-        st.error("❌ 路徑未配置。")
+        st.error("❌ 腳本路徑未配置或不存在。請至核心設定配置 local_script_path。")
 
 elif channel == "🧪 結構修復 (Patch)":
     st.title("🧪 檔案結構物理修復 (PDF 知識導入版)")
