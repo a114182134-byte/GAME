@@ -268,10 +268,11 @@ with st.sidebar:
     AI_MODEL = model_map[AI_MODEL_DISPLAY]
     
     channel = st.radio("功能頻道", [
-        "📸 素材打撈 (Media)", "🔧 齒輪重組 (Script)", 
+        "📸 素材打撈 (Media)", "🔧 齒輪重組 (Script)",
         "🧪 結構修復 (Patch)", "🔮 虛空啟示 (Oracle)",
         "📜 航行日誌 (Log)", "📜 航道啟示錄 (Oracle's Compass)",
-        "📚 封存圖書館 (Library)", "⚙️ 核心維護 (System)"
+        "📚 封存圖書館 (Library)", "🕹️ 遊戲開發總覽",
+        "🤖 腳本鍛造", "⚙️ 核心維護 (System)"
     ])
 
 # ==========================================
@@ -675,22 +676,24 @@ elif channel == "🧪 結構修復 (Patch)":
                         st.error(f"維修過程發生故障: {e}")
     else:
         st.error("❌ 找不到腳本路徑，請先確認 local_script_path 是否正確。")
+# =========================================================
+# 🔮 頻道：虛空啟示 (Oracle) - 穩定導出版
+# =========================================================
 elif channel == "🔮 虛空啟示 (Oracle)":
     st.title("🔮 虛空啟示：全域架構諮詢")
     st.caption("🤖 AI 將分析當前專案的所有腳本 (.gd) 與日誌 (.md) 來回答妳的問題")
     st.markdown("---")
 
-    # 1. 自動打撈全域數據
+    # 1. 自動打撈路徑定位
     CURRENT_LOG_DIR = os.path.join(DATA_ROOT, current_p_name, "logs")
     script_path = config.get("local_script_path", "")
     
+    # 顯示當前知識庫範圍
     with st.expander("📂 檢視 AI 當前載入的知識庫範圍"):
         all_files = []
-        # 收集 MD
         if os.path.exists(CURRENT_LOG_DIR):
             md_files = [f for f in os.listdir(CURRENT_LOG_DIR) if f.endswith(".md")]
             all_files.extend([f"日誌: {f}" for f in md_files])
-        # 收集 GD
         if script_path and os.path.exists(script_path):
             gd_files = [f for f in os.listdir(script_path) if f.endswith(".gd")]
             all_files.extend([f"腳本: {f}" for f in gd_files])
@@ -698,81 +701,97 @@ elif channel == "🔮 虛空啟示 (Oracle)":
 
     # 2. 諮詢介面
     st.subheader("❓ 向架構導師提問")
-    user_query = st.text_area("例如：『根據目前的魚叉腳本和日誌紀錄，我該如何優化海上戰鬥的節奏？』", height=150)
-    
-    # 3. 額外導入 PDF 手冊 (可選)
+    user_query = st.text_area("例如：『根據目前的魚叉腳本和日誌紀錄，我該如何優化海上戰鬥的節奏？』", height=120)
     uploaded_pdf = st.file_uploader("若有特定的診斷報告 PDF，也可一併導入參考", type=['pdf'])
 
-    if st.button("🌌 啟動虛空連結"):
+    # 核心：使用 Session State 儲存 AI 回答
+    if "oracle_response" not in st.session_state:
+        st.session_state.oracle_response = ""
+
+    if st.button("🌌 啟動虛空連結", type="primary", use_container_width=True):
         if not user_query:
             st.warning("請先輸入妳的疑問。")
         elif not FINAL_KEY:
             st.error("❌ 金鑰未配置。")
         else:
             with st.spinner("AI 正在翻閱所有日誌與腳本中..."):
-                # 提取 PDF 內容
-                pdf_text = ""
-                if uploaded_pdf:
-                    pdf_reader = PyPDF2.PdfReader(uploaded_pdf)
-                    for page in pdf_reader.pages:
-                        pdf_text += page.extract_text()
-
-                # 提取所有的 MD 和 GD 內容 (建立 Context)
-                context_data = []
-                # 讀取 MD
-                if os.path.exists(CURRENT_LOG_DIR):
-                    for f in os.listdir(CURRENT_LOG_DIR):
-                        if f.endswith(".md"):
-                            with open(os.path.join(CURRENT_LOG_DIR, f), "r", encoding="utf-8") as file:
-                                context_data.append(f"--- 日誌 {f} ---\n{file.read()}")
-                # 讀取 GD
-                if script_path and os.path.exists(script_path):
-                    for f in os.listdir(script_path):
-                        if f.endswith(".gd"):
-                            with open(os.path.join(script_path, f), "r", encoding="utf-8") as file:
-                                context_data.append(f"--- 腳本 {f} ---\n{file.read()}")
-
-                full_context = "\n\n".join(context_data)
-                
-                # 呼叫 AI
-                model = genai.GenerativeModel(AI_MODEL)
-                oracle_prompt = f"""
-                你是一位資深的遊戲開發架構師，專精於 Godot 引擎與跨媒體敘事。
-                以下是專案《{current_p_name}》的完整開發數據（包含日誌與腳本內容）以及參考 PDF。
-                
-                [參考數據]
-                {full_context}
-                
-                [PDF 補充資訊]
-                {pdf_text}
-                
-                [使用者問題]
-                {user_query}
-                
-                請根據以上資訊，給出具備專業架構眼光、邏輯嚴密且符合開發現況的建議。
-                """
-                
                 try:
-                    response = model.generate_content(oracle_prompt)
-                    st.markdown("### 🔮 啟示內容：")
-                    st.write(response.text)
+                    # 提取 PDF 內容
+                    pdf_text = ""
+                    if uploaded_pdf:
+                        pdf_reader = PyPDF2.PdfReader(uploaded_pdf)
+                        for page in pdf_reader.pages:
+                            pdf_text += page.extract_text()
+
+                    # 提取日誌與腳本
+                    context_data = []
+                    if os.path.exists(CURRENT_LOG_DIR):
+                        for f in os.listdir(CURRENT_LOG_DIR):
+                            if f.endswith(".md"):
+                                with open(os.path.join(CURRENT_LOG_DIR, f), "r", encoding="utf-8") as file:
+                                    context_data.append(f"--- 日誌 {f} ---\n{file.read()}")
                     
-                    # ✨ 新增：諮詢結果導出 PDF
-                    if st.button("📥 導出此份諮詢建議 (PDF)"):
-                        from weasyprint import HTML
-                        pdf_name = f"Oracle_{datetime.datetime.now().strftime('%m%d_%H%M')}.pdf"
-                        html_c = f"<h1>開發諮詢建議</h1><p>問題：{user_query}</p><hr><div>{response.text.replace('\n', '<br>')}</div>"
-                        HTML(string=html_c).write_pdf(pdf_name)
-                        st.download_button("💾 下載 PDF 啟示錄", open(pdf_name, "rb"), file_name=pdf_name)
-                        
+                    if script_path and os.path.exists(script_path):
+                        for f in os.listdir(script_path):
+                            if f.endswith(".gd"):
+                                with open(os.path.join(script_path, f), "r", encoding="utf-8") as file:
+                                    context_data.append(f"--- 腳本 {f} ---\n{file.read()}")
+
+                    full_context = "\n\n".join(context_data)
+                    
+                    # 呼叫 AI 模型
+                    model = genai.GenerativeModel(AI_MODEL)
+                    oracle_prompt = f"""
+                    你是一位資深的遊戲開發架構師。請分析《{current_p_name}》的數據：
+                    [參考數據] {full_context}
+                    [PDF 補充] {pdf_text}
+                    [問題] {user_query}
+                    """
+                    response = model.generate_content(oracle_prompt)
+                    # 將結果存入 Session，防止重新運行時消失
+                    st.session_state.oracle_response = response.text
+                    st.session_state.last_query = user_query
                 except Exception as e:
-                    if "429" in str(e):
-                        st.error("🚨 核心過熱，請等待 30 秒後再點擊。")
-                    else:
-                        st.error(f"連線中斷: {e}")
+                    st.error(f"連線中斷: {e}")
+
+    # 3. 顯示啟示與導出 (移出按鈕區塊外)
+    if st.session_state.oracle_response:
+        st.markdown("---")
+        st.markdown("### 🔮 啟示內容：")
+        st.info(st.session_state.oracle_response)
+        
+        # 建立導出路徑
+        from weasyprint import HTML
+        output_dir = os.path.join(DATA_ROOT, current_p_name, "logs")
+        pdf_filename = f"Oracle_{datetime.datetime.now().strftime('%m%d_%H%M')}.pdf"
+        pdf_path = os.path.join(output_dir, pdf_filename)
+
+        # 生成 PDF
+        html_content = f"""
+        <html><body style="font-family: sans-serif; padding: 20px;">
+            <h1 style="color: #d4af37;">餘燼啟示錄：開發建議</h1>
+            <p><b>諮詢問題：</b> {st.session_state.get('last_query', '未知')}</p>
+            <hr>
+            <div style="white-space: pre-wrap; line-height: 1.6;">{st.session_state.oracle_response}</div>
+            <p style="font-size: 10px; color: #999; margin-top: 50px;">由 小白龍 19GB 核心主機生成</p>
+        </body></html>
+        """
+        
+        if st.button("📥 準備導出檔案", use_container_width=True):
+            HTML(string=html_content).write_pdf(pdf_path)
+            st.success(f"✅ 啟示錄已歸檔至 logs 資料夾")
+            
+            with open(pdf_path, "rb") as f:
+                st.download_button(
+                    label="💾 點此下載 PDF 啟示錄",
+                    data=f,
+                    file_name=pdf_filename,
+                    mime="application/pdf",
+                    use_container_width=True
+                )
 
     st.divider()
-    st.caption("※ 答案之書會隨機連結你的開發記憶，幫助你找回《餘燼航路》的初心。")
+    st.caption("📜 虛空啟示錄：當代碼陷入沉寂，導師將翻開舊日的 log，指引妳重回那座未竟的發射台。")
 
 # =========================================================
 # 📜 頻道：航行日誌 (Log) - 跨專案對接與 AI 聯動版
@@ -1232,20 +1251,52 @@ elif channel == "⚙️ 核心維護 (System)":
                 st.rerun()
         
         st.divider()
+       # =========================================================
+        # 🚨 危險區域：專案物理拆解 (深度強制解鎖版)
+        # =========================================================
         with st.expander("🚨 危險區域：專案物理拆解"):
-            st.warning(f"注意：此操作將物理刪除「{current_p_name}」所有資料夾與配置。")
-            confirm_input = st.text_input("請輸入專案名稱以解鎖刪除：", placeholder=current_p_name)
-            is_verified = (confirm_input == current_p_name)
+            st.warning(f"警告：此操作將物理刪除「{current_p_name}」所有資料夾與配置。")
             
-            if st.button(f"🔥 確認物理刪除：{current_p_name}", type="primary", disabled=not is_verified, use_container_width=True):
+            confirm_input = st.text_input(
+                f"請輸入專案名稱「{current_p_name}」以解鎖：", 
+                placeholder=current_p_name,
+                key="delete_auth_input"
+            )
+            
+            if st.button(f"🔥 啟動末世抹除協定", type="primary", disabled=(confirm_input != current_p_name), use_container_width=True):
                 if len(PROJECTS) > 1:
+                    # 1. 🔍 逃生艙：決定跳轉目標
+                    escape_target = [p for p in PROJECTS.keys() if p != current_p_name][0]
+                    
+                    # 2. 📝 從記憶體移除紀錄
+                    target_dir = os.path.join(DATA_ROOT, current_p_name)
                     del PROJECTS[current_p_name]
                     save_config(PROJECTS)
-                    project_dir = os.path.join(DATA_ROOT, current_p_name)
-                    if os.path.exists(project_dir):
-                        shutil.rmtree(project_dir, ignore_errors=True)
-                    st.toast(f"🚩 專案【{current_p_name}】已徹底抹除", icon="🗑️")
-                    st.rerun()
+                    
+                    # 3. 🛸 意識強制跳轉 (解除 Streamlit 對當前目錄的監控)
+                    st.session_state["current_project"] = escape_target
+                    
+                    # 4. 🧹 清理內部緩存 (重要：解除可能的檔案讀取鎖定)
+                    st.cache_resource.clear()
+                    st.cache_data.clear()
+
+                    # 5. 🧨 強制物理抹除
+                    # 先切換當前工作目錄到 DATA_ROOT，防止進程鎖定子資料夾
+                    original_cwd = os.getcwd()
+                    try:
+                        if os.path.exists(target_dir):
+                            # 使用 shutil.rmtree 的 onerror 處理唯讀檔案或權限問題
+                            def remove_readonly(func, path, excinfo):
+                                os.chmod(path, 0o777) # 賦予最高權限
+                                func(path)
+
+                            shutil.rmtree(target_dir, onerror=remove_readonly)
+                            
+                        st.toast(f"🚩 專案【{current_p_name}】已徹底抹除", icon="🗑️")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"❌ 物理抹除失敗：{str(e)}")
+                        st.info("💡 建議：手動關閉『檔案總管』或『VS Code』對該資料夾的存取，並切換專案後重試。")
                 else:
                     st.error("🚨 核心協議：必須保留至少一個運作中的專案。")
 
@@ -1287,3 +1338,214 @@ elif channel == "⚙️ 核心維護 (System)":
                         st.warning("⚠️ 此金鑰無生成權限。")
             except Exception as e:
                 st.error(f"❌ 掃描程序崩潰：{str(e)}")
+# =========================================================
+    # 🕹️ 頻道：遊戲開發總覽 (Game Dev Hub) - 黃銅觀測站
+    # =========================================================
+elif channel == "🕹️ 遊戲開發總覽":
+    st.title("🕹️ 餘燼檔案：全域開發總覽")
+    
+    # --- [1] 注入黃銅蒸氣美學 CSS ---
+    st.markdown("""
+        <style>
+        .game-card {
+            background-color: #1a1a1a;
+            border: 2px solid #d4af37;
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 20px;
+            box-shadow: 5px 5px 15px rgba(0,0,0,0.5);
+            transition: transform 0.3s;
+        }
+        .game-card:hover {
+            transform: scale(1.02);
+            border-color: #ffcc33;
+            box-shadow: 0px 0px 20px rgba(212, 175, 55, 0.4);
+        }
+        .game-title {
+            color: #d4af37;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 1.5rem;
+            font-weight: bold;
+            margin-top: 10px;
+        }
+        .game-preview {
+            color: #b0b0b0;
+            font-size: 0.9rem;
+            line-height: 1.4;
+        }
+        </style>
+    """, unsafe_allow_html=True)
+
+    # --- [2] 全域專案數據打撈 ---
+    all_game_data = []
+    if os.path.exists(DATA_ROOT):
+        for p_folder in os.listdir(DATA_ROOT):
+            p_path = os.path.join(DATA_ROOT, p_folder)
+            if not os.path.isdir(p_path): continue
+            
+            # 尋找與專案同名的 .md 或資料夾內的 md
+            md_path = os.path.join(p_path, f"{p_folder}.md")
+            if not os.path.exists(md_path):
+                # 如果沒找到同名 md，抓 logs 裡最新的一份
+                log_dir = os.path.join(p_path, "logs")
+                if os.path.exists(log_dir):
+                    md_files = [f for f in os.listdir(log_dir) if f.endswith(".md")]
+                    if md_files:
+                        md_path = os.path.join(log_dir, sorted(md_files)[-1])
+            
+            if os.path.exists(md_path):
+                # 抓取圖片：尋找 media 裡最新的一張圖
+                media_dir = os.path.join(p_path, "media")
+                cover_img = None
+                if os.path.exists(media_dir):
+                    imgs = [f for f in os.listdir(media_dir) if f.lower().endswith(('.png', '.jpg', '.webp'))]
+                    if imgs:
+                        # 排序抓最新的一張作為封面
+                        imgs = sorted(imgs, key=lambda x: os.path.getmtime(os.path.join(media_dir, x)), reverse=True)
+                        cover_img = os.path.join(media_dir, imgs[0])
+                
+                # 讀取前 100 字簡介
+                with open(md_path, "r", encoding="utf-8") as f:
+                    content = f.read()
+                    # 移除 Markdown 標籤純取文字
+                    clean_text = content.replace("#", "").replace("*", "").strip()
+                    preview = clean_text[:100] + "..." if len(clean_text) > 100 else clean_text
+
+                all_game_data.append({
+                    "name": p_folder,
+                    "img": cover_img,
+                    "preview": preview,
+                    "full_content": content,
+                    "path": md_path
+                })
+
+    # --- [3] 卡片式佈局呈現 ---
+    if not all_game_data:
+        st.warning("📡 觀測站掃描完畢，未發現任何啟動中的專案檔案。")
+    else:
+        # 每列顯示兩張卡片
+        cols = st.columns(2)
+        for idx, game in enumerate(all_game_data):
+            with cols[idx % 2]:
+                # 建立卡片容器
+                st.markdown(f'<div class="game-card">', unsafe_allow_html=True)
+                
+                # 圖片顯示 (若無則顯示預設齒輪)
+                if game["img"]:
+                    st.image(game["img"], use_column_width=True)
+                else:
+                    # 預設生鏽齒輪圖片 (可替換為妳筆電裡的特定路徑)
+                    st.image("https://img.icons8.com/color/96/000000/settings.png", caption="⚙️ 齒輪休眠中 (暫無素材)", width=100)
+                
+                st.markdown(f'<div class="game-title">{game["name"]}</div>', unsafe_allow_html=True)
+                st.markdown(f'<div class="game-preview">{game["preview"]}</div>', unsafe_allow_html=True)
+                
+                # 展開詳細設定
+                with st.expander(f"🛠️ 檢視《{game['name']}》核心設定"):
+                    st.markdown(game["full_content"])
+                    st.caption(f"📍 座標：{game['path']}")
+                
+                st.markdown('</div>', unsafe_allow_html=True)
+                st.write("") # 間距
+# =========================================================
+# 🤖 頻道：核心腳本鍛造爐 (Script Forge) - 文獻聯動版
+# =========================================================
+elif channel == "🤖 腳本鍛造":
+    st.title("🤖 核心腳本鍛造爐")
+    st.caption("根據需求與 PDF 文獻自動生成 Godot GDScript 或其他開發腳本。")
+    st.markdown("---")
+
+    # --- 1. 文獻注入 (PDF 聯動區) ---
+    st.subheader("📚 文獻參考注入 (選填)")
+    referenced_pdf = st.file_uploader("導入參考 PDF (例如 Godot 文件或企劃書)", type=["pdf"], key="forge_pdf")
+    pdf_context = ""
+    
+    if referenced_pdf:
+        try:
+            import PyPDF2
+            pdf_reader = PyPDF2.PdfReader(referenced_pdf)
+            for page in pdf_reader.pages:
+                text = page.extract_text()
+                if text: pdf_context += text + "\n"
+            st.success(f"✅ 已成功解析《{referenced_pdf.name}》，將作為邏輯參考。")
+        except Exception as e:
+            st.error(f"❌ PDF 解析失敗：{e}")
+
+    st.divider()
+
+    # --- 2. 鍛造配置區域 ---
+    st.subheader("🛠️ 邏輯定義")
+    col_type, col_name = st.columns([1, 2])
+    with col_type:
+        script_type = st.selectbox("腳本類型", options=[".gd (Godot)", ".py (Python)", ".js (Javascript)", ".json", ".md"])
+    with col_name:
+        new_script_name = st.text_input("檔案名稱 (含副檔名)", placeholder="harpoon.gd", value="new_script" + script_type.split(" ")[0])
+
+    script_requirement = st.text_area(
+        "請輸入腳本邏輯需求：", 
+        placeholder="例如：根據參考文獻寫一個魚叉發射邏輯...", 
+        height=150
+    )
+
+    # --- 3. 啟動鍛造引擎 ---
+    if st.button("🔥 啟動邏輯鍛造", type="primary", use_container_width=True):
+        if not FINAL_KEY:
+            st.error("❌ 核心金鑰失效，請更新 API Key。")
+        elif not new_script_name or not script_requirement:
+            st.warning("📡 報告架構師：請輸入檔案名稱與需求內容。")
+        else:
+            try:
+                with st.spinner(f"🚀 正在穿越虛空編寫 {new_script_name}..."):
+                    model = genai.GenerativeModel(AI_MODEL)
+                    
+                    # 構建強大的 Prompt，整合 PDF 內容
+                    prompt = f"""
+                    你是一位資深的遊戲開發者與架構師。
+                    請撰寫代碼。
+                    檔案類型：{script_type}
+                    檔案名稱：{new_script_name}
+                    需求描述：{script_requirement}
+                    """
+                    
+                    if pdf_context:
+                        prompt += f"\n\n以下是參考文獻內容，請務必遵循其規格或邏輯撰寫：\n{pdf_context[:8000]}"
+                    
+                    prompt += "\n\n請僅回傳代碼內容，不要有解釋文字，不要包含 Markdown 代碼塊標籤。"
+                    
+                    response = model.generate_content(prompt)
+                    generated_code = response.text.strip()
+
+                    # 4. 實體寫入腳本庫
+                    save_dir = os.path.join(DATA_ROOT, current_p_name, "scripts")
+                    if not os.path.exists(save_dir):
+                        os.makedirs(save_dir)
+                    
+                    save_path = os.path.join(save_dir, new_script_name)
+                    with open(save_path, "w", encoding="utf-8") as f:
+                        f.write(generated_code)
+                    
+                    st.success(f"✅ 腳本已寫入：`{save_path}`")
+                    
+                    # 預覽與下載
+                    st.divider()
+                    st.subheader("📝 鍛造產物預覽")
+                    st.code(generated_code, language=script_type.split("(")[0].strip().replace(".", ""))
+                    st.download_button("📥 立即提取檔案", generated_code, file_name=new_script_name, use_container_width=True)
+                    st.balloons()
+            except Exception as e:
+                st.error(f"❌ 鍛造失敗：{str(e)}")
+
+    # --- 5. 既有腳本庫管理 ---
+    st.divider()
+    st.subheader("📂 既有腳本庫")
+    script_folder = os.path.join(DATA_ROOT, current_p_name, "scripts")
+    if os.path.exists(script_folder):
+        existing_scripts = [f for f in os.listdir(script_folder) if not f.startswith(".")]
+        for s in existing_scripts:
+            with st.expander(f"📄 {s}"):
+                s_path = os.path.join(script_folder, s)
+                with open(s_path, "r", encoding="utf-8") as f:
+                    st.code(f.read())
+                if st.button(f"🗑️ 抹除 {s}", key=f"del_{s}"):
+                    os.remove(s_path)
+                    st.rerun()
