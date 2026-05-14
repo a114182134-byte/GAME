@@ -205,7 +205,19 @@ with st.sidebar:
     config = PROJECTS[current_p_name]
     
     st.divider()
+    # --- ✨ 跨專案對接協定 (Bridge Protocol) ---
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("🔗 專案對接協定")
+    is_bridged = st.sidebar.checkbox("開啟跨專案對接", value=False, help="開啟後，日誌頻道將同時顯示多個專案的紀錄。")
     
+    bridge_targets = [current_p_name] # 預設包含當前專案
+    if is_bridged:
+        # 讓妳選取要對接的「特定」專案
+        bridge_targets = st.sidebar.multiselect(
+            "選擇對接目標：",
+            options=list(PROJECTS.keys()),
+            default=[current_p_name]
+        )
     # 2. 金鑰管理邏輯
     st.subheader("🔑 金鑰管理")
     saved_keys = config.get("keys_list", [])
@@ -761,107 +773,128 @@ elif channel == "🔮 虛空啟示 (Oracle)":
 
     st.divider()
     st.caption("※ 答案之書會隨機連結你的開發記憶，幫助你找回《餘燼航路》的初心。")
-elif channel == "📜 航行日誌 (Log)":
-    st.title("📜 舊日航行完整紀錄")
-    st.markdown("---")
-    
-    # 定位實體路徑
-    CURRENT_LOG_DIR = os.path.join(DATA_ROOT, current_p_name, "logs")
-    CURRENT_MEDIA_DIR = os.path.join(DATA_ROOT, current_p_name, "media")
 
-    # =========================================================
-    # 🎨 視覺觀測窗：展示二姊的畫作與素材 (保持原樣)
-    # =========================================================
-    if os.path.exists(CURRENT_MEDIA_DIR):
-        all_imgs = [f for f in os.listdir(CURRENT_MEDIA_DIR) if f.lower().endswith(('.png', '.jpg', '.jpeg', '.webp'))]
-        if all_imgs:
-            with st.expander("🎨 航道視覺觀測窗 (二姊的畫作庫)", expanded=True):
-                st.caption(f"目前存放於：{CURRENT_MEDIA_DIR}")
-                img_cols = st.columns(3)
-                sorted_imgs = sorted(all_imgs, key=lambda x: os.path.getmtime(os.path.join(CURRENT_MEDIA_DIR, x)), reverse=True)
-                for idx, img_name in enumerate(sorted_imgs[:6]):
-                    with img_cols[idx % 3]:
-                        st.image(os.path.join(CURRENT_MEDIA_DIR, img_name), use_column_width=True, caption=img_name)
+# =========================================================
+# 📜 頻道：航行日誌 (Log) - 跨專案對接與 AI 聯動版
+# =========================================================
+elif channel == "📜 航行日誌 (Log)":
+    if is_bridged and len(bridge_targets) > 1:
+        st.title(f"🔗 跨專案對接：{', '.join(bridge_targets)}")
+        st.caption("目前處於跨專案聯動模式，數據將進行全域排序。")
+    else:
+        st.title(f"📜 {current_p_name}：專屬航行紀錄")
+    st.markdown(f"---")
     
-    # =========================================================
-    # 🚀 核心功能：全專案大數據彙整區 (彈窗儲存進化)
-    # =========================================================
-    st.info(f"📂 正在監控專案：{current_p_name} | 準備進行跨城市數據彙整")
+    # 1. 🔍 多軌數據打撈邏輯
+    all_logs_data = []
+    for p_name in bridge_targets:
+        t_log_dir = os.path.join(DATA_ROOT, p_name, "logs")
+        t_media_dir = os.path.join(DATA_ROOT, p_name, "media")
+        
+        if os.path.exists(t_log_dir):
+            for f_name in os.listdir(t_log_dir):
+                # 讀取 md 檔案，排除生成的報告
+                if f_name.endswith(".md") and "_全案報告_" not in f_name:
+                    f_full_path = os.path.join(t_log_dir, f_name)
+                    all_logs_data.append({
+                        "project": p_name,
+                        "filename": f_name,
+                        "path": f_full_path,
+                        "media_dir": t_media_dir,
+                        "time": os.path.getmtime(f_full_path)
+                    })
+
+    # ⚡ 全域時間排序 (最新優先)
+    all_logs_data = sorted(all_logs_data, key=lambda x: x["time"], reverse=True)
+
+    # 2. 🚀 數據精煉中心 (支援聯動總結)
+    st.subheader("📊 專案彙整與報告生成")
+    report_label = "📊 生成聯動開發報告" if is_bridged else f"📊 生成 {current_p_name} 專屬報告"
     
-    # 移除原本的 text_input，直接改為按鈕啟動
-    if st.button("📊 生成全專案 AI 總結報告 (整合所有 MD & 素材)", type="primary", use_container_width=True):
+    if st.button(report_label, type="primary", use_container_width=True):
         if not FINAL_KEY:
             st.error("❌ 核心金鑰失效，請更新 API Key。")
         else:
             try:
-                # 1. 先呼喚檔案總管，讓妳選位置，選好才開始運算
-                import tkinter as tk
-                from tkinter import filedialog
-                
-                root = tk.Tk()
-                root.withdraw()
-                root.attributes('-topmost', True)
-                
-                timestamp = datetime.datetime.now().strftime('%m%d_%H%M')
-                default_report_name = f"{current_p_name}_全案報告_{timestamp}.pdf"
-                
-                save_path = filedialog.asksaveasfilename(
-                    defaultextension=".pdf",
-                    filetypes=[("PDF files", "*.pdf")],
-                    initialfile=default_report_name,
-                    title="小白龍架構師：請核定全域開發報告儲存位置"
-                )
-                root.destroy()
-
-                # 只有確認路徑後，才動用 19GB 核心進行數據打撈
-                if save_path:
-                    with st.spinner("正在打撈台北、新竹、台南發射站數據並精煉中..."):
-                        all_contents = []
-                        # 抓取日誌
-                        if os.path.exists(CURRENT_LOG_DIR):
-                            for log_f in sorted(os.listdir(CURRENT_LOG_DIR)):
-                                if log_f.endswith(".md"):
-                                    with open(os.path.join(CURRENT_LOG_DIR, log_f), "r", encoding="utf-8") as f:
-                                        all_contents.append(f"### 文件: {log_f}\n{f.read()}")
-                        
-                        # 媒體統計
-                        if os.path.exists(CURRENT_MEDIA_DIR):
-                            media_files = os.listdir(CURRENT_MEDIA_DIR)
-                            waves = [f for f in media_files if f.endswith(".wav")]
-                            imgs_count = [f for f in media_files if f.lower().endswith(('.png', '.jpg', '.webp'))]
-                            all_contents.append(f"\n### 媒體庫統計\n已入庫語音: {len(waves)} 筆\n已入庫二姊畫作/素材: {len(imgs_count)} 筆")
-
-                        full_context = "\n\n".join(all_contents)
-                        
-                        # AI 彙整
+                with st.spinner(f"🚀 正在對接 {'、'.join(bridge_targets)} 數據並精煉 PDF..."):
+                    combined_contents = []
+                    for entry in all_logs_data:
+                        with open(entry["path"], "r", encoding="utf-8") as f:
+                            combined_contents.append(f"--- [來源專案: {entry['project']}] 檔案: {entry['filename']} ---\n{f.read()}")
+                    
+                    if not combined_contents:
+                        st.warning("📡 範圍內找不到原始日誌數據。")
+                    else:
+                        # 準備 AI 彙整內容
+                        full_context = "\n\n".join(combined_contents)
                         model = genai.GenerativeModel(AI_MODEL)
-                        summary_prompt = f"你是一位資深開發助手。請根據以下數據為《{current_p_name}》整理專業報告。數據源：\n{full_context}"
                         
-                        response = model.generate_content(summary_prompt)
+                        # 針對對接模式調整 Prompt
+                        if is_bridged:
+                            prompt = f"你是一位資深開發架構師。請針對以下多個對接專案的日誌進行聯動分析，指出它們的開發關聯點、技術重合處或潛在的整合建議：\n\n{full_context}"
+                        else:
+                            prompt = f"你是一位資深開發助手。請根據以下數據為《{current_p_name}》整理專業報告：\n\n{full_context}"
+                        
+                        response = model.generate_content(prompt)
                         ai_report = response.text
+                        
+                        # 建立報告路徑 (存放在當前主專案)
+                        timestamp_str = datetime.datetime.now().strftime('%m%d_%H%M')
+                        report_filename = f"聯動報告_{timestamp_str}.pdf" if is_bridged else f"{current_p_name}_報告_{timestamp_str}.pdf"
+                        save_path = os.path.join(DATA_ROOT, current_p_name, "logs", report_filename)
                         
                         # 轉 PDF
                         from weasyprint import HTML
                         html_style = f"""
                         <html><body style="font-family: sans-serif; padding: 30px;">
-                            <h1 style="color: #d4af37; border-bottom: 2px solid #d4af37;">餘燼航路：全域開發報告</h1>
-                            <div style="background: #fdfaf3; padding: 20px; border: 1px solid #ddd; line-height: 1.6;">
-                                {ai_report.replace('\n', '<br>')}
+                            <h1 style="color: #d4af37; border-bottom: 2px solid #d4af37;">餘燼航路：{'聯動' if is_bridged else '專屬'}開發報告</h1>
+                            <div style="background: #fdfaf3; padding: 20px; border: 1px solid #ddd; line-height: 1.6; white-space: pre-wrap;">
+                                {ai_report}
                             </div>
                             <p style="font-size: 10px; color: #999; margin-top: 20px;">由 小白龍 19GB 核心主機生成 | 座標：屏東九如發射站</p>
                         </body></html>
                         """
                         HTML(string=html_style).write_pdf(save_path)
-                        st.success(f"✅ 全案報告已物理歸檔：{save_path}")
-                else:
-                    st.warning("⚠️ 已取消報告生成動作。")
-
+                        st.success(f"✅ 報告已生成並物理歸檔。")
+                        
+                        with open(save_path, "rb") as pdf_file:
+                            st.download_button(label="📥 下載報告 PDF", data=pdf_file, file_name=report_filename, mime="application/pdf", use_container_width=True)
             except Exception as e:
                 st.error(f"❌ 彙整失敗: {str(e)}")
 
-    st.markdown("---")
+    # 3. 📜 歷史航行紀錄 (支援跨專案對齊)
+    st.divider()
+    st.subheader("📜 歷史紀錄詳細打撈")
     
-    # [後續建立時間線的代碼維持不變...]
+    if not all_logs_data:
+        st.info("📡 偵測範圍內尚無任何日誌紀錄。")
+    else:
+        import re
+        for log_item in all_logs_data:
+            # 顯示標籤：若開啟對接則顯示專案名
+            expander_label = f"🚀 [{log_item['project']}] {log_item['filename']}" if is_bridged else f"📒 {log_item['filename']}"
+            
+            with st.expander(expander_label, expanded=False):
+                with open(log_item["path"], "r", encoding="utf-8") as f:
+                    log_text = f.read()
+                
+                col_txt, col_img = st.columns([2, 1])
+                with col_txt:
+                    st.markdown(log_text)
+                
+                with col_img:
+                    img_match = re.search(r"- \*\*關聯影像\*\*: (.+)", log_text)
+                    if img_match:
+                        ref_img_name = img_match.group(1).strip()
+                        # 自動去該日誌所屬的專案媒體庫找圖
+                        ref_img_path = os.path.join(log_item["media_dir"], ref_img_name)
+                        if os.path.exists(ref_img_path):
+                            st.image(ref_img_path, caption=f"來自 {log_item['project']}", use_column_width=True)
+                        else:
+                            st.caption("⚠️ 影像檔案遺失")
+                    else:
+                        st.caption("📷 無影像連結")
+                st.caption(f"📍 座標：`{log_item['path']}`")
 
 elif channel == "📜 航道啟示錄 (Oracle's Compass)":
     st.title("📜 航道啟示錄 (Oracle's Compass)")
