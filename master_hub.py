@@ -570,112 +570,136 @@ elif channel == "🔧 齒輪重組 (Script)":
     else:
         st.error("❌ 腳本路徑未配置。請至核心設定配置 local_script_path。")
 
+# =========================================================
+# 🧪 頻道：全域結構物理修復 (Global Patch)
+# =========================================================
 elif channel == "🧪 結構修復 (Patch)":
-    st.title("🧪 檔案結構物理修復 (PDF 知識導入版)")
-    st.caption("🚨 模式：結構補丁 — 支援參考 PDF 並自動導出修復報告")
+    st.title("🧪 全域檔案結構物理修復")
+    st.caption("🚨 模式：全域補丁 — 支援多檔案批次重構，參考 PDF 知識並自動生成總結報告")
     st.markdown("---")
 
     script_path = config.get("local_script_path", "")
     if script_path and os.path.exists(script_path):
-        # 獲取腳本清單
-        files = [f for f in os.listdir(script_path) if f.endswith('.gd') or f.endswith('.py')]
-        if not files:
-            st.info("📂 腳本夾內空無一物，請先從「齒輪重組」打撈物資。")
+        # 1. 獲取所有可修復的腳本
+        all_files = [f for f in os.listdir(script_path) if f.endswith('.gd') or f.endswith('.py')]
+        
+        if not all_files:
+            st.info("📂 腳本夾內空無一物，請先確認路徑。")
         else:
-            selected_file = st.selectbox("🎯 選擇待修補目標", files, key="patch_select")
-            file_full_path = os.path.join(script_path, selected_file)
+            # --- 多選介面 ---
+            st.subheader("🎯 選擇待修補目標 (支援多選)")
+            select_all = st.checkbox("全選所有腳本")
             
-            with open(file_full_path, "r", encoding="utf-8") as f:
-                current_code = f.read()
+            if select_all:
+                targets = all_files
+                st.success(f"已選定全部 {len(targets)} 個腳本進行全域重構。")
+            else:
+                targets = st.multiselect("手動挑選修補檔案", all_files, key="patch_multi_select")
 
-            # --- 1. 知識注入 (PDF) ---
+            # --- 2. 知識注入 (PDF) ---
             st.subheader("📋 導入維修手冊 (PDF)")
-            uploaded_pdf = st.file_uploader("上傳之前的 AI 診斷報告或參考文件", type=['pdf'])
+            uploaded_pdf = st.file_uploader("上傳全域規範 PDF（如：新版架構手冊）", type=['pdf'])
             pdf_knowledge = ""
             if uploaded_pdf:
                 import PyPDF2
                 pdf_reader = PyPDF2.PdfReader(uploaded_pdf)
                 for page in pdf_reader.pages:
-                    pdf_knowledge += page.extract_text()
+                    pdf_knowledge += (page.extract_text() or "") + "\n"
                 st.success(f"✅ PDF 知識已注入緩衝區 ({len(pdf_knowledge)} 字)")
 
             st.divider()
 
-            # --- 2. 修復需求描述 ---
-            st.subheader("🔥 物理修復執行")
-            fix_instr = st.text_area("描述修復需求", placeholder="例如：根據 PDF 第 3 頁建議，修復 harpoon.gd 的 null 引用...")
+            # --- 3. 修復需求描述 ---
+            st.subheader("🔥 啟動全域重構")
+            fix_instr = st.text_area("描述修復需求", placeholder="例如：將所有腳本中的 old_v 變數改為 new_v，並參考 PDF 的 UI 規範重寫 init 函式...")
 
-            # --- 3. 執行物理重構與彈窗儲存報告 ---
-            if st.button("🛠️ 執行物理重構與生成報告", type="primary", use_container_width=True):
-                if not fix_instr:
-                    st.error("❌ 請輸入修復指令，否則維修工無法動工。")
+            if st.button("🛠️ 執行全域物理重構與生成總報", type="primary", use_container_width=True):
+                if not targets:
+                    st.error("❌ 未選取任何檔案，維修工無法動工。")
+                elif not fix_instr:
+                    st.error("❌ 請輸入全域修復指令。")
                 else:
                     try:
-                        # 先呼叫檔案總管，讓妳選位置，選好才動工
+                        # 彈出存檔視窗 (詢問總報告儲存位置)
                         import tkinter as tk
                         from tkinter import filedialog
-                        
-                        root = tk.Tk()
-                        root.withdraw()
-                        root.attributes('-topmost', True)
+                        root = tk.Tk(); root.withdraw(); root.attributes('-topmost', True)
                         
                         timestamp = datetime.datetime.now().strftime('%m%d_%H%M')
-                        default_report_name = f"Patch_Report_{selected_file.split('.')[0]}_{timestamp}.pdf"
-                        
-                        save_path = filedialog.asksaveasfilename(
+                        default_report_name = f"Global_Patch_Report_{timestamp}.pdf"
+                        save_report_path = filedialog.asksaveasfilename(
                             defaultextension=".pdf",
                             filetypes=[("PDF files", "*.pdf")],
                             initialfile=default_report_name,
-                            title="小白龍架構師：請核定修復報告儲存位置"
+                            title="小白龍架構師：請指定全域維修總報儲存位置"
                         )
                         root.destroy()
 
-                        # 只有在妳確認儲存路徑後，才開始消耗 19GB 記憶體進行 AI 運算
-                        if save_path:
-                            with st.spinner("戰地維修工正在閱讀 PDF 並重新鍛造代碼..."):
-                                model = genai.GenerativeModel(AI_MODEL)
-                                full_prompt = f"你現在是戰地維修工。參考手冊內容：\n{pdf_knowledge}\n\n指令：{fix_instr}\n\n請根據手冊與指令修復此代碼，僅輸出純代碼，不要有說明。\n代碼：\n{current_code}"
+                        if save_report_path:
+                            report_data = [] # 用於收集每份檔案的修復狀況
+                            
+                            progress_bar = st.progress(0)
+                            for idx, file_name in enumerate(targets):
+                                file_full_path = os.path.join(script_path, file_name)
                                 
-                                response = model.generate_content(full_prompt)
-                                clean_code = response.text.replace("```gdscript", "").replace("```", "").strip()
-                                
-                                # 1. 執行物理覆寫 (更新腳本)
-                                with open(file_full_path, "w", encoding="utf-8") as f:
-                                    f.write(clean_code)
-                                st.success(f"✅ {selected_file} 結構修補完成！代碼已物理更新。")
-                                
-                                # 2. 生成 PDF 修復報告
-                                from weasyprint import HTML
-                                html_content = f"""
-                                <html>
-                                    <head><style>
-                                        body {{ font-family: sans-serif; padding: 25px; line-height: 1.6; }}
-                                        h1 {{ color: #D4AF37; border-bottom: 2px solid #D4AF37; }}
-                                        .box {{ background: #f9f9f9; padding: 15px; border-left: 5px solid #D4AF37; margin: 10px 0; }}
-                                        pre {{ background: #222; color: #eee; padding: 15px; font-size: 12px; }}
-                                    </style></head>
-                                    <body>
-                                        <h1>結構修復報告：{selected_file}</h1>
-                                        <p><b>生成時間:</b> {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
-                                        <div class="box"><b>修復指令：</b><br>{fix_instr}</div>
-                                        <hr>
-                                        <h2>修復後代碼截圖 (前 1500 字)：</h2>
-                                        <pre>{clean_code[:1500]}</pre>
-                                        <p style="text-align: right; font-size: 10px; color: #666; margin-top: 30px;">
-                                            由 小白龍 19GB 核心母站認證 | 屏東九如發射站
-                                        </p>
-                                    </body>
-                                </html>
-                                """
-                                HTML(string=html_content).write_pdf(save_path)
-                                st.success(f"📄 修復報告已成功封存至：{save_path}")
+                                with st.spinner(f"正在重構 ({idx+1}/{len(targets)}): {file_name}"):
+                                    # 讀取原始代碼
+                                    with open(file_full_path, "r", encoding="utf-8") as f:
+                                        current_code = f.read()
+
+                                    # AI 重構
+                                    model = genai.GenerativeModel(AI_MODEL)
+                                    full_prompt = f"""
+                                    你現在是全域維修工。
+                                    參考規範：{pdf_knowledge[:6000]}
+                                    指令：{fix_instr}
+                                    正在修復檔案：{file_name}
+                                    請根據指令修復代碼，僅輸出純代碼，不要說明文字。
+                                    原始代碼：
+                                    {current_code}
+                                    """
+                                    response = model.generate_content(full_prompt)
+                                    clean_code = response.text.replace("```gdscript", "").replace("```", "").strip()
+
+                                    # 物理覆寫更新
+                                    with open(file_full_path, "w", encoding="utf-8") as f:
+                                        f.write(clean_code)
+                                    
+                                    report_data.append({"file": file_name, "status": "✅ 成功", "preview": clean_code[:300]})
+                                    progress_bar.progress((idx + 1) / len(targets))
+
+                            # 4. 生成 PDF 總報
+                            from weasyprint import HTML
+                            items_html = "".join([f"<li><b>{item['file']}</b>: {item['status']}<br><pre style='font-size:10px;'>{item['preview']}...</pre></li>" for item in report_data])
+                            
+                            html_content = f"""
+                            <html>
+                                <head><style>
+                                    body {{ font-family: sans-serif; padding: 25px; }}
+                                    h1 {{ color: #D4AF37; border-bottom: 2px solid #D4AF37; }}
+                                    .summary {{ background: #f0f0f0; padding: 15px; border-radius: 5px; }}
+                                    pre {{ background: #222; color: #eee; padding: 10px; }}
+                                </style></head>
+                                <body>
+                                    <h1>全域架構重構總報</h1>
+                                    <p><b>執行時間:</b> {datetime.datetime.now()}</p>
+                                    <div class="summary"><b>全域指令：</b><br>{fix_instr}</div>
+                                    <hr>
+                                    <ul>{items_html}</ul>
+                                    <p style="text-align: right; color: #666;">由 小白龍 19GB 核心主機簽署</p>
+                                </body>
+                            </html>
+                            """
+                            HTML(string=html_content).write_pdf(save_report_path)
+                            st.success(f"🚀 全域修補完成！共處理 {len(targets)} 個檔案。報告已存至：{save_report_path}")
+                            st.balloons()
                         else:
-                            st.warning("⚠️ 已取消修復動作，未改動任何實體檔案。")
+                            st.warning("⚠️ 已取消全域修復動作。")
 
                     except Exception as e:
-                        st.error(f"維修過程發生故障: {e}")
+                        st.error(f"全域維修故障: {e}")
     else:
-        st.error("❌ 找不到腳本路徑，請先確認 local_script_path 是否正確。")
+        st.error("❌ 找不到腳本路徑。")
 # =========================================================
 # 🔮 頻道：虛空啟示 (Oracle) - 穩定導出版
 # =========================================================
@@ -1448,104 +1472,108 @@ elif channel == "🕹️ 遊戲開發總覽":
                 st.markdown('</div>', unsafe_allow_html=True)
                 st.write("") # 間距
 # =========================================================
-# 🤖 頻道：核心腳本鍛造爐 (Script Forge) - 文獻聯動版
+# 🤖 頻道：核心腳本鍛造爐 (Script Forge) - 全域重塑版
 # =========================================================
 elif channel == "🤖 腳本鍛造":
-    st.title("🤖 核心腳本鍛造爐")
-    st.caption("根據需求與 PDF 文獻自動生成 Godot GDScript 或其他開發腳本。")
+    st.title("🤖 核心腳本鍛造爐：全域重塑")
+    st.caption("⚙️ 支援「全新鍛造」與「既有重塑」。AI 可讀取專案內所有腳本並執行邏輯更改。")
     st.markdown("---")
 
-    # --- 1. 文獻注入 (PDF 聯動區) ---
-    st.subheader("📚 文獻參考注入 (選填)")
-    referenced_pdf = st.file_uploader("導入參考 PDF (例如 Godot 文件或企劃書)", type=["pdf"], key="forge_pdf")
-    pdf_context = ""
+    # --- 1. 定位腳本庫 ---
+    script_folder = os.path.join(DATA_ROOT, current_p_name, "scripts")
+    if not os.path.exists(script_folder):
+        os.makedirs(script_folder)
     
+    existing_scripts = [f for f in os.listdir(script_folder) if not f.startswith(".")]
+
+    # --- 2. 模式切換：全新 vs 修改 ---
+    forge_mode = st.radio("選擇操作模式", ["✨ 全新邏輯鍛造", "🔧 既有腳本重塑"], horizontal=True)
+
+    selected_script_content = ""
+    target_file_name = ""
+
+    if forge_mode == "🔧 既有腳本重塑":
+        if not existing_scripts:
+            st.info("📡 腳本庫空虛，請先切換至全新鍛造模式。")
+        else:
+            target_file_name = st.selectbox("選擇要重塑的腳本", options=existing_scripts)
+            # 讀取現有內容
+            with open(os.path.join(script_folder, target_file_name), "r", encoding="utf-8") as f:
+                selected_script_content = f.read()
+            with st.expander("📄 查看原始代碼內容"):
+                st.code(selected_script_content)
+    else:
+        col_type, col_name = st.columns([1, 2])
+        with col_type:
+            st_type = st.selectbox("腳 from 選項", [".gd", ".py", ".js", ".json", ".md"])
+        with col_name:
+            target_file_name = st.text_input("新檔案名稱", placeholder="harpoon.gd")
+
+    # --- 3. 文獻參考 (選填) ---
+    referenced_pdf = st.file_uploader("📚 參考外部 PDF 文獻 (可選)", type=["pdf"])
+    pdf_context = ""
     if referenced_pdf:
-        try:
-            import PyPDF2
-            pdf_reader = PyPDF2.PdfReader(referenced_pdf)
-            for page in pdf_reader.pages:
-                text = page.extract_text()
-                if text: pdf_context += text + "\n"
-            st.success(f"✅ 已成功解析《{referenced_pdf.name}》，將作為邏輯參考。")
-        except Exception as e:
-            st.error(f"❌ PDF 解析失敗：{e}")
+        import PyPDF2
+        reader = PyPDF2.PdfReader(referenced_pdf)
+        for page in reader.pages:
+            pdf_context += (page.extract_text() or "") + "\n"
 
-    st.divider()
+    # --- 4. 修改需求 ---
+    st.subheader("🛠️ 修改/編寫需求")
+    instruction = st.text_area("請輸入妳的指令：", placeholder="例如：將原本的魚叉發射改為追蹤模式，並參考 PDF 的公式調整速度...", height=150)
 
-    # --- 2. 鍛造配置區域 ---
-    st.subheader("🛠️ 邏輯定義")
-    col_type, col_name = st.columns([1, 2])
-    with col_type:
-        script_type = st.selectbox("腳本類型", options=[".gd (Godot)", ".py (Python)", ".js (Javascript)", ".json", ".md"])
-    with col_name:
-        new_script_name = st.text_input("檔案名稱 (含副檔名)", placeholder="harpoon.gd", value="new_script" + script_type.split(" ")[0])
-
-    script_requirement = st.text_area(
-        "請輸入腳本邏輯需求：", 
-        placeholder="例如：根據參考文獻寫一個魚叉發射邏輯...", 
-        height=150
-    )
-
-    # --- 3. 啟動鍛造引擎 ---
-    if st.button("🔥 啟動邏輯鍛造", type="primary", use_container_width=True):
-        if not FINAL_KEY:
-            st.error("❌ 核心金鑰失效，請更新 API Key。")
-        elif not new_script_name or not script_requirement:
-            st.warning("📡 報告架構師：請輸入檔案名稱與需求內容。")
+    # --- 5. 啟動重塑引擎 ---
+    if st.button("🔥 啟動全域重塑協定", type="primary", use_container_width=True):
+        if not target_file_name or not instruction:
+            st.warning("📡 報告架構師：檔案名稱與指令不可為空。")
+        elif not FINAL_KEY:
+            st.error("❌ 金鑰失效。")
         else:
             try:
-                with st.spinner(f"🚀 正在穿越虛空編寫 {new_script_name}..."):
+                with st.spinner(f"🚀 正在對 {target_file_name} 進行邏輯超頻..."):
                     model = genai.GenerativeModel(AI_MODEL)
                     
-                    # 構建強大的 Prompt，整合 PDF 內容
+                    # 核心 Prompt：賦予 AI 區分「新寫」與「修改」的能力
                     prompt = f"""
-                    你是一位資深的遊戲開發者與架構師。
-                    請撰寫代碼。
-                    檔案類型：{script_type}
-                    檔案名稱：{new_script_name}
-                    需求描述：{script_requirement}
+                    你是一位資深的 Godot 架構師。
+                    目標檔案：{target_file_name}
+                    操作模式：{forge_mode}
+                    
+                    [原始內容] (若是全新鍛造則為空)
+                    {selected_script_content}
+                    
+                    [PDF 參考資料]
+                    {pdf_context[:5000]}
+                    
+                    [修改需求]
+                    {instruction}
+                    
+                    請根據需求，重寫整份檔案的代碼。
+                    請僅回傳代碼內容，不要有解釋文字，不要包含 Markdown 代碼塊標籤。
                     """
                     
-                    if pdf_context:
-                        prompt += f"\n\n以下是參考文獻內容，請務必遵循其規格或邏輯撰寫：\n{pdf_context[:8000]}"
-                    
-                    prompt += "\n\n請僅回傳代碼內容，不要有解釋文字，不要包含 Markdown 代碼塊標籤。"
-                    
                     response = model.generate_content(prompt)
-                    generated_code = response.text.strip()
+                    new_code = response.text.strip()
 
-                    # 4. 實體寫入腳本庫
-                    save_dir = os.path.join(DATA_ROOT, current_p_name, "scripts")
-                    if not os.path.exists(save_dir):
-                        os.makedirs(save_dir)
-                    
-                    save_path = os.path.join(save_dir, new_script_name)
+                    # 6. 物理覆蓋/寫入
+                    save_path = os.path.join(script_folder, target_file_name)
                     with open(save_path, "w", encoding="utf-8") as f:
-                        f.write(generated_code)
+                        f.write(new_code)
                     
-                    st.success(f"✅ 腳本已寫入：`{save_path}`")
-                    
-                    # 預覽與下載
-                    st.divider()
-                    st.subheader("📝 鍛造產物預覽")
-                    st.code(generated_code, language=script_type.split("(")[0].strip().replace(".", ""))
-                    st.download_button("📥 立即提取檔案", generated_code, file_name=new_script_name, use_container_width=True)
+                    st.success(f"✅ 腳本物理更新成功：`{save_path}`")
+                    st.code(new_code)
                     st.balloons()
             except Exception as e:
-                st.error(f"❌ 鍛造失敗：{str(e)}")
+                st.error(f"❌ 重塑失敗：{str(e)}")
 
-    # --- 5. 既有腳本庫管理 ---
+    # --- 7. 管理既有腳本庫 ---
     st.divider()
-    st.subheader("📂 既有腳本庫")
-    script_folder = os.path.join(DATA_ROOT, current_p_name, "scripts")
-    if os.path.exists(script_folder):
-        existing_scripts = [f for f in os.listdir(script_folder) if not f.startswith(".")]
-        for s in existing_scripts:
-            with st.expander(f"📄 {s}"):
-                s_path = os.path.join(script_folder, s)
-                with open(s_path, "r", encoding="utf-8") as f:
-                    st.code(f.read())
-                if st.button(f"🗑️ 抹除 {s}", key=f"del_{s}"):
-                    os.remove(s_path)
-                    st.rerun()
+    st.subheader("📂 腳本庫物理狀態")
+    for s in existing_scripts:
+        with st.expander(f"📄 {s}"):
+            s_p = os.path.join(script_folder, s)
+            with open(s_p, "r", encoding="utf-8") as f:
+                st.code(f.read())
+            if st.button(f"🗑️ 抹除 {s}", key=f"del_{s}"):
+                os.remove(s_p)
+                st.rerun()
