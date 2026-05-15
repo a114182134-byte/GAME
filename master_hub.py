@@ -294,144 +294,163 @@ for d in [LOG_DIR, MEDIA_DIR, ARCHIVE_DIR]:
     if not os.path.exists(d): 
         os.makedirs(d)
         print(f"🛠️ 物理空間已重構：{d}")
+
 # =========================================================
-    # 📸 頻道：素材打撈 (Media) - 整合 Vertex AI Imagen 3
-    # =========================================================
+# 📸 頻道：📸 素材打撈 (Media) - PDF 規範與多模態融合版
+# =========================================================
 if channel == "📸 素材打撈 (Media)":
-    st.title("📸 殘留影像與波形打撈")
-    st.markdown("---")
+        st.title("📸 殘留影像與波形打撈")
+        st.caption("🤖 透過自定義「核心協議」深度解析影像、聲波與 PDF 規範")
+        st.markdown("---")
 
-    # ⚡ 核心優化：發射站與設備識別
-    ua = st.context.headers.get("User-Agent", "").lower()
-    dev_type = "行動裝置" if "mobile" in ua else "核心主機"
-    
-    col_loc, col_info = st.columns([1, 2])
-    with col_loc:
-        station_origin = st.selectbox("📍 當前發射站", ["總部 (acer)", "台北站", "新竹站", "台南站"])
-    with col_info:
-        st.caption(f"📡 偵測設備類型：`{dev_type}`")
-        st.caption(f"🌍 接入網址：`{st.context.headers.get('Host')}`")
+        # ⚡ 核心優化：發射站識別
+        ua = st.context.headers.get("User-Agent", "").lower()
+        dev_type = "行動裝置" if "mobile" in ua else "核心主機"
+        
+        col_loc, col_info = st.columns([1, 2])
+        with col_loc:
+            station_origin = st.selectbox("📍 當前發射站", ["總部 (acer)", "台北站", "新竹站", "台南站"])
+        with col_info:
+            st.caption(f"📡 設備類型：`{dev_type}` | 接入網址：`{st.context.headers.get('Host')}`")
 
-    # 1. 指令輸入區域 (此欄位同時供 AI 分析與 Imagen 3 繪圖使用)
-    u_text = st.text_area("🧠 指令核心 / 靈感咒語", 
-                            placeholder="描述開發需求、畫作靈感，或輸入繪圖咒語（例如：黃銅風格的蒸汽機械鯨魚）...", 
-                            help="輸入文字後，可點擊下方的『AI 思考』或『虛空重塑』。")
-    
-    st.subheader("🎤 語音靈感捕捉")
-    from audio_recorder_streamlit import audio_recorder
-    audio_bytes = audio_recorder(
-        text=f"來自【{station_origin}】的通訊 (點擊開始/停止)",
-        recording_color="#e74c3c",
-        neutral_color="#D4AF37",
-        icon_name="microphone",
-        icon_size="2x",
-    )
-
-    # [自動入庫監聽器] - 錄音攔截
-    if audio_bytes:
-        if "last_mic_data" not in st.session_state or st.session_state.last_mic_data != audio_bytes:
-            timestamp = datetime.datetime.now().strftime('%m%d_%H%M%S')
-            mic_name = f"mic_{station_origin}_{timestamp}.wav"
-            mic_path = os.path.join(MEDIA_DIR, mic_name)
-            with open(mic_path, "wb") as f:
-                f.write(audio_bytes)
-            st.session_state.last_mic_data = audio_bytes 
-            st.sidebar.success(f"🎙️ 聲波已從 {station_origin} 入庫")
-        st.audio(audio_bytes, format="audio/wav")
-
-    st.divider()
-    
-    # 2. 檔案上傳區
-    col_up1, col_up2 = st.columns(2)
-    with col_up1:
-        u_img = st.file_uploader("🖼️ 影像打撈 (二姊的畫作)", type=['png', 'jpg', 'jpeg', 'webp'])
-        if u_img:
-            img_filename = f"{station_origin}_{u_img.name}"
-            img_path = os.path.join(MEDIA_DIR, img_filename)
-            from PIL import Image
-            img = Image.open(u_img)
-            st.image(img, caption="🚀 待處理影像預覽", use_column_width=True)
-            if not os.path.exists(img_path):
-                img.save(img_path)
-                st.sidebar.success(f"🖼️ 影像已存入倉庫")
-
-    with col_up2:
-        u_audio = st.file_uploader("🎵 音訊打撈 (BGM/素材)", type=['mp3', 'wav', 'ogg', 'm4a'])
-        if u_audio:
-            audio_filename = f"{station_origin}_{u_audio.name}"
-            a_path = os.path.join(MEDIA_DIR, audio_filename)
-            if not os.path.exists(a_path):
-                with open(a_path, "wb") as f:
-                    f.write(u_audio.getbuffer())
-                st.sidebar.success(f"🎵 音訊已入庫")
-            st.audio(u_audio)
-
-    st.markdown("---")
-    
-    # 3. 雙核心處理按鈕
-    col_btn1, col_btn2 = st.columns(2)
-    
-    with col_btn1:
-        analyze_btn = st.button("🚀 啟動跨模態解析 (AI 思考)", use_container_width=True, help="分析現有圖片、語音或文字並產生紀錄。")
-    
-    with col_btn2:
-        draw_btn = st.button("🎨 請求虛空重塑 (Imagen 3)", use_container_width=True, help="使用 Vertex AI 生成全新影像。")
-
-    # --- 邏輯處理 A：Gemini 多模態分析 ---
-    if analyze_btn:
-        if not (u_img or u_audio or u_text or audio_bytes):
-            st.warning("📡 偵測不到感測器數據，請先提供素材。")
-        else:
-            with st.spinner(f"正在連線至 {station_origin} 進行解析..."):
-                now = datetime.datetime.now()
-                timestamp = now.strftime('%m%d_%H%M%S')
-                model = genai.GenerativeModel(AI_MODEL)
-                content_payload = []
-                
-                if u_img: content_payload.append(Image.open(u_img))
-                if audio_bytes: content_payload.append({"mime_type": "audio/wav", "data": audio_bytes})
-                if u_audio: 
-                    u_audio.seek(0)
-                    content_payload.append({"mime_type": u_audio.type, "data": u_audio.read()})
-
-                final_prompt = u_text if u_text else "請分析以上媒體內容並整理成日誌。"
-                content_payload.insert(0, final_prompt)
-
-                try:
-                    if FINAL_KEY:
-                        response = model.generate_content(content_payload)
-                        st.markdown(f"### 📝 AI 綜合分析報告 (來源：{station_origin})")
-                        st.write(response.text)
-                        
-                        # 寫入日誌
-                        log_file = os.path.join(LOG_DIR, f"log_{timestamp}.md")
-                        with open(log_file, "a", encoding="utf-8") as f:
-                            f.write(f"# 航行紀錄 - {now.strftime('%Y-%m-%d %H:%M:%S')}\n\n")
-                            f.write(f"### 📍 來源發射站：{station_origin}\n")
-                            if u_img: f.write(f"- **關聯影像**: {station_origin}_{u_img.name}\n")
-                            f.write(f"\n#### 🧠 AI 解析結果\n{response.text}\n")
-                        st.success(f"✅ 日誌已寫入：log_{timestamp}.md")
-                except Exception as e:
-                    st.error(f"❌ 解析引擎異常: {str(e)}")
-
-    # --- 邏輯 B：Vertex AI Imagen 3 生成 (動態 ID 版) ---
-        if draw_btn:
-            # 檢查是否有輸入 ID
-            current_id = st.session_state.get("gcp_project_id")
+        # --- [核心功能] 手動更改 AI 提示詞配置區 ---
+        with st.expander("🛠️ 配置打撈核心協議 (System Prompt 自定義)"):
+            st.info("💡 這裡定義 AI 如何「解讀」妳上傳的影像與聲音。")
             
+            default_media_instruction = f"""你現在是《{current_p_name}》專案的【素材打撈官】。
+妳擅長從混亂的影像與波形中提取符合「黃銅蒸氣」與「末世重生」美學的開發靈感。
+
+[任務]
+請結合媒體內容與 PDF 規範，為開發者提供精準的素材分析報告。
+
+[啟示指南]
+1. 視覺拆解：分析構圖、色調是否符合專案設定。
+2. 聲學轉譯：若有音訊，將其描述為具體的遊戲環境音效需求。
+3. 規範對齊：嚴格遵守 PDF 提供的視覺或敘事準則。"""
+
+            if "custom_media_prompt" not in st.session_state:
+                st.session_state.custom_media_prompt = default_media_instruction
+
+            st.session_state.custom_media_prompt = st.text_area(
+                "編輯打撈協議 (System Instruction)", 
+                value=st.session_state.custom_media_prompt, 
+                height=200,
+                key="media_prompt_area"
+            )
+            if st.button("♻️ 重置打撈協議"):
+                st.session_state.custom_media_prompt = default_media_instruction
+                st.rerun()
+
+        # 1. 指令與 PDF 知識注入區
+        st.subheader("🧠 靈感指令與 PDF 規範")
+        col_text, col_pdf = st.columns([2, 1])
+        
+        with col_text:
+            u_text = st.text_area("靈感咒語 / 分析需求", placeholder="例如：分析這張草圖，並根據 PDF 規範建議改進方向...", height=120)
+        
+        with col_pdf:
+            u_pdf = st.file_uploader("📋 導入規範 (PDF)", type=['pdf'], key="media_pdf_up")
+            pdf_context = ""
+            if u_pdf:
+                pdf_reader = PyPDF2.PdfReader(u_pdf)
+                for page in pdf_reader.pages:
+                    pdf_context += (page.extract_text() or "") + "\n"
+                st.success(f"✅ 規範已載入")
+
+        st.subheader("🎤 語音靈感捕捉")
+        from audio_recorder_streamlit import audio_recorder
+        audio_bytes = audio_recorder(
+            text=f"來自【{station_origin}】的通訊",
+            recording_color="#e74c3c", neutral_color="#D4AF37", icon_size="2x"
+        )
+
+        if audio_bytes:
+            if "last_mic_data" not in st.session_state or st.session_state.last_mic_data != audio_bytes:
+                timestamp = datetime.datetime.now().strftime('%m%d_%H%M%S')
+                mic_path = os.path.join(MEDIA_DIR, f"mic_{station_origin}_{timestamp}.wav")
+                with open(mic_path, "wb") as f: f.write(audio_bytes)
+                st.session_state.last_mic_data = audio_bytes 
+                st.sidebar.success(f"🎙️ 聲波已入庫")
+            st.audio(audio_bytes, format="audio/wav")
+
+        st.divider()
+        
+        # 2. 檔案上傳預覽
+        col_up1, col_up2 = st.columns(2)
+        with col_up1:
+            u_img = st.file_uploader("🖼️ 影像打撈", type=['png', 'jpg', 'jpeg', 'webp'])
+            if u_img:
+                img = Image.open(u_img)
+                st.image(img, caption="🚀 待處理影像預覽", use_column_width=True)
+
+        with col_up2:
+            u_audio = st.file_uploader("🎵 音訊打撈", type=['mp3', 'wav', 'ogg', 'm4a'])
+            if u_audio: st.audio(u_audio)
+
+        st.markdown("---")
+        
+        # 3. 處理按鈕
+        col_btn1, col_btn2 = st.columns(2)
+        with col_btn1:
+            analyze_btn = st.button("🚀 啟動解析 (依據自定義協議)", use_container_width=True)
+        with col_btn2:
+            draw_btn = st.button("🎨 請求虛空重塑 (Imagen 3)", use_container_width=True)
+
+        # --- 邏輯處理 A：Gemini 解析 ---
+        if analyze_btn:
+            if not (u_img or u_audio or u_text or audio_bytes or u_pdf):
+                st.warning("📡 數據不足，請提供素材、指令或規範。")
+            else:
+                with st.spinner("正在套用自定義協議進行打撈..."):
+                    try:
+                        content_payload = []
+                        # 注入【自定義協議】與【PDF】
+                        full_instr = f"{st.session_state.custom_media_prompt}\n\n[PDF 規範內容]：\n{pdf_context[:5000]}"
+                        content_payload.append(full_instr)
+                        
+                        # 注入指令與媒體
+                        content_payload.append(f"[用戶當前指令]：{u_text if u_text else '綜合分析媒體內容。'}")
+                        if u_img: content_payload.append(img)
+                        if audio_bytes: content_payload.append({"mime_type": "audio/wav", "data": audio_bytes})
+                        if u_audio: 
+                            u_audio.seek(0)
+                            content_payload.append({"mime_type": u_audio.type, "data": u_audio.read()})
+
+                        genai.configure(api_key=FINAL_KEY, transport="rest")
+                        model = genai.GenerativeModel(AI_MODEL)
+                        response = model.generate_content(content_payload)
+                        
+                        st.markdown("### 📝 打撈報告")
+                        st.info(response.text)
+                        
+                        # 紀錄日誌
+                        log_dir = os.path.join(DATA_ROOT, current_p_name, "logs")
+                        os.makedirs(log_dir, exist_ok=True)
+                        log_path = os.path.join(log_dir, f"Media_Salvage_{datetime.datetime.now().strftime('%m%d_%H%M')}.md")
+                        with open(log_path, "w", encoding="utf-8") as f:
+                            f.write(f"# 媒體打撈報告\n\n### 核心協議\n{st.session_state.custom_media_prompt}\n\n### 解析結果\n{response.text}")
+                        st.success(f"✅ 解析結果已同步至專案日誌")
+                    except Exception as e:
+                        st.error(f"❌ 引擎異常: {str(e)}")
+    # --- 邏輯 B：Vertex AI Imagen 3 生成 ---
+        if draw_btn:
+            current_id = st.session_state.get("gcp_project_id")
             if not current_id:
                 st.warning("⚠️ 虛空航道未定位！請先在側邊欄輸入『GCP Project ID』。")
             elif not u_text:
-                st.warning("🔮 缺少咒語！請在『🧠 指令核心』輸入描述。")
+                st.warning("🔮 缺少咒語！請在指令核心輸入描述。")
             else:
                 with st.spinner("正在調動 Vertex AI 進行物理重塑..."):
                     try:
                         from vertexai.preview.vision_models import ImageGenerationModel
-                        
-                        # 直接呼叫模型 (前提是側邊欄已成功執行 vertexai.init)
                         imagen_model = ImageGenerationModel.from_pretrained("imagen-3.0-generate-001")
                         
-                        full_prompt = f"Style: Brass steampunk, post-apocalyptic. Subject: {u_text}"
+                        # 如果有 PDF 內容，擷取關鍵字加入咒語
+                        style_hint = "Brass steampunk, post-apocalyptic."
+                        if pdf_context:
+                            style_hint += f" Follow style guide: {pdf_context[:200]}"
+                            
+                        full_prompt = f"Style: {style_hint}. Subject: {u_text}"
                         
                         images = imagen_model.generate_images(
                             prompt=full_prompt,
@@ -444,7 +463,6 @@ if channel == "📸 素材打撈 (Media)":
                             img_name = f"reborn_{station_origin}_{timestamp}.png"
                             img_path = os.path.join(MEDIA_DIR, img_name)
                             images[0].save(location=img_path, include_generation_parameters=False)
-                            
                             st.image(img_path, caption=f"✨ 虛空重塑完成：{u_text}")
                             st.sidebar.success(f"🎨 影像已入庫")
                     except Exception as e:
@@ -571,37 +589,36 @@ elif channel == "🔧 齒輪重組 (Script)":
         st.error("❌ 腳本路徑未配置。請至核心設定配置 local_script_path。")
 
 # =========================================================
-# 🧪 頻道：全域結構物理修復 (Global Patch)
+# =========================================================
+# =========================================================
+# =========================================================
+# 🧪 頻道：全域結構物理修復 (Patch) - 配額超頻打包版
 # =========================================================
 elif channel == "🧪 結構修復 (Patch)":
-    st.title("🧪 全域檔案結構物理修復")
-    st.caption("🚨 模式：全域補丁 — 支援多檔案批次重構，參考 PDF 知識並自動生成總結報告")
+    st.title("🧪 全域結構物理修復 (2.5 Flash 能量節省版)")
+    st.caption(f"🚀 核心協定：打包重塑 | 當前模型：{AI_MODEL}")
+    st.warning(f"⚡ 警告：2.5 Flash 每日僅 20 次配額。目前採用「打包模式」，選中再多檔案也只消耗 1 次配額。")
     st.markdown("---")
 
     script_path = config.get("local_script_path", "")
     if script_path and os.path.exists(script_path):
-        # 1. 獲取所有可修復的腳本
         all_files = [f for f in os.listdir(script_path) if f.endswith('.gd') or f.endswith('.py')]
         
         if not all_files:
-            st.info("📂 腳本夾內空無一物，請先確認路徑。")
+            st.info("📂 腳本夾內空無一物。")
         else:
             # --- 多選介面 ---
-            st.subheader("🎯 選擇待修補目標 (支援多選)")
-            select_all = st.checkbox("全選所有腳本")
+            st.subheader("🎯 選擇待修補目標")
+            col_sel_all, _ = st.columns([1, 3])
+            with col_sel_all:
+                is_select_all = st.checkbox("全選所有腳本")
             
-            if select_all:
-                targets = all_files
-                st.success(f"已選定全部 {len(targets)} 個腳本進行全域重構。")
-            else:
-                targets = st.multiselect("手動挑選修補檔案", all_files, key="patch_multi_select")
+            targets = all_files if is_select_all else st.multiselect("手動挑選檔案", all_files, key="patch_multi_select")
 
-            # --- 2. 知識注入 (PDF) ---
-            st.subheader("📋 導入維修手冊 (PDF)")
-            uploaded_pdf = st.file_uploader("上傳全域規範 PDF（如：新版架構手冊）", type=['pdf'])
+            # --- 1. 知識注入 (PDF) ---
+            uploaded_pdf = st.file_uploader("📋 導入維修手冊 (PDF)", type=['pdf'], key="patch_pdf")
             pdf_knowledge = ""
             if uploaded_pdf:
-                import PyPDF2
                 pdf_reader = PyPDF2.PdfReader(uploaded_pdf)
                 for page in pdf_reader.pages:
                     pdf_knowledge += (page.extract_text() or "") + "\n"
@@ -609,213 +626,230 @@ elif channel == "🧪 結構修復 (Patch)":
 
             st.divider()
 
-            # --- 3. 修復需求描述 ---
-            st.subheader("🔥 啟動全域重構")
-            fix_instr = st.text_area("描述修復需求", placeholder="例如：將所有腳本中的 old_v 變數改為 new_v，並參考 PDF 的 UI 規範重寫 init 函式...")
+            # --- 2. 修復需求 ---
+            st.subheader("🔥 啟動打包重構")
+            fix_instr = st.text_area("描述修復需求", placeholder="例如：將所有檔案的變數名改為底線命名法...", height=150)
 
-            if st.button("🛠️ 執行全域物理重構與生成總報", type="primary", use_container_width=True):
-                if not targets:
-                    st.error("❌ 未選取任何檔案，維修工無法動工。")
-                elif not fix_instr:
-                    st.error("❌ 請輸入全域修復指令。")
+            # --- 3. 核心執行邏輯 ---
+            if st.button("🛠️ 執行物理重構與生成報告", type="primary", use_container_width=True):
+                if not targets or not fix_instr:
+                    st.error("❌ 未選取檔案或指令。")
+                elif not ai_key: # 確保讀取環境變數中的 key
+                    st.error("❌ 找不到 AI 金鑰。")
                 else:
                     try:
-                        # 彈出存檔視窗 (詢問總報告儲存位置)
+                        # 詢問存檔位置
                         import tkinter as tk
                         from tkinter import filedialog
                         root = tk.Tk(); root.withdraw(); root.attributes('-topmost', True)
-                        
-                        timestamp = datetime.datetime.now().strftime('%m%d_%H%M')
-                        default_report_name = f"Global_Patch_Report_{timestamp}.pdf"
                         save_report_path = filedialog.asksaveasfilename(
                             defaultextension=".pdf",
                             filetypes=[("PDF files", "*.pdf")],
-                            initialfile=default_report_name,
-                            title="小白龍架構師：請指定全域維修總報儲存位置"
+                            initialfile=f"Batch_Patch_{datetime.datetime.now().strftime('%m%d')}.pdf",
+                            title="小白龍架構師：指定維修報告位置"
                         )
                         root.destroy()
 
                         if save_report_path:
-                            report_data = [] # 用於收集每份檔案的修復狀況
-                            
-                            progress_bar = st.progress(0)
-                            for idx, file_name in enumerate(targets):
-                                file_full_path = os.path.join(script_path, file_name)
+                            # A. 打包所有代碼
+                            all_code_context = ""
+                            for file_name in targets:
+                                f_path = os.path.join(script_path, file_name)
+                                with open(f_path, "r", encoding="utf-8") as f:
+                                    all_code_context += f"\n--- START_FILE: {file_name} ---\n{f.read()}\n--- END_FILE: {file_name} ---\n"
+
+                            # B. 啟動 AI (REST 協定穩定版)
+                            with st.spinner(f"正在對 {len(targets)} 個檔案進行大規模邏輯超頻..."):
+                                genai.configure(api_key=ai_key, transport="rest")
+                                model = genai.GenerativeModel(model_name=AI_MODEL)
                                 
-                                with st.spinner(f"正在重構 ({idx+1}/{len(targets)}): {file_name}"):
-                                    # 讀取原始代碼
-                                    with open(file_full_path, "r", encoding="utf-8") as f:
-                                        current_code = f.read()
+                                full_prompt = f"""
+                                你現在是資深 Godot 架構師。
+                                [參考規範] {pdf_knowledge[:3000]}
+                                [修改需求] {fix_instr}
+                                
+                                以下是多個檔案的代碼集。請根據需求修改，並保持以下輸出格式：
+                                每個檔案開頭必須是「--- SAVETO: 檔名 ---」，接著是完整代碼。
+                                不要有任何解釋，只要純代碼。
+                                
+                                [代碼集]
+                                {all_code_context}
+                                """
+                                
+                                response = model.generate_content(full_prompt)
+                                raw_output = response.text
 
-                                    # AI 重構
-                                    model = genai.GenerativeModel(AI_MODEL)
-                                    full_prompt = f"""
-                                    你現在是全域維修工。
-                                    參考規範：{pdf_knowledge[:6000]}
-                                    指令：{fix_instr}
-                                    正在修復檔案：{file_name}
-                                    請根據指令修復代碼，僅輸出純代碼，不要說明文字。
-                                    原始代碼：
-                                    {current_code}
-                                    """
-                                    response = model.generate_content(full_prompt)
-                                    clean_code = response.text.replace("```gdscript", "").replace("```", "").strip()
-
-                                    # 物理覆寫更新
-                                    with open(file_full_path, "w", encoding="utf-8") as f:
-                                        f.write(clean_code)
-                                    
-                                    report_data.append({"file": file_name, "status": "✅ 成功", "preview": clean_code[:300]})
-                                    progress_bar.progress((idx + 1) / len(targets))
-
-                            # 4. 生成 PDF 總報
-                            from weasyprint import HTML
-                            items_html = "".join([f"<li><b>{item['file']}</b>: {item['status']}<br><pre style='font-size:10px;'>{item['preview']}...</pre></li>" for item in report_data])
+                            # C. 物理拆解與覆寫
+                            import re
+                            parts = re.split(r"--- SAVETO: (.*?) ---", raw_output)
+                            success_files = []
                             
-                            html_content = f"""
-                            <html>
-                                <head><style>
-                                    body {{ font-family: sans-serif; padding: 25px; }}
-                                    h1 {{ color: #D4AF37; border-bottom: 2px solid #D4AF37; }}
-                                    .summary {{ background: #f0f0f0; padding: 15px; border-radius: 5px; }}
-                                    pre {{ background: #222; color: #eee; padding: 10px; }}
-                                </style></head>
-                                <body>
-                                    <h1>全域架構重構總報</h1>
-                                    <p><b>執行時間:</b> {datetime.datetime.now()}</p>
-                                    <div class="summary"><b>全域指令：</b><br>{fix_instr}</div>
-                                    <hr>
-                                    <ul>{items_html}</ul>
-                                    <p style="text-align: right; color: #666;">由 小白龍 19GB 核心主機簽署</p>
-                                </body>
-                            </html>
-                            """
-                            HTML(string=html_content).write_pdf(save_report_path)
-                            st.success(f"🚀 全域修補完成！共處理 {len(targets)} 個檔案。報告已存至：{save_report_path}")
-                            st.balloons()
-                        else:
-                            st.warning("⚠️ 已取消全域修復動作。")
+                            # parts 結構: [空/雜訊, 檔名1, 代碼1, 檔名2, 代碼2...]
+                            for i in range(1, len(parts), 2):
+                                f_name = parts[i].strip()
+                                f_code = parts[i+1].strip().replace("```gdscript", "").replace("```", "").strip()
+                                
+                                if f_name in targets:
+                                    with open(os.path.join(script_path, f_name), "w", encoding="utf-8") as f:
+                                        f.write(f_code)
+                                    success_files.append(f_name)
+                                    st.toast(f"✅ {f_name} 已物理覆寫")
 
+                            st.success(f"🚀 重構完成！僅消耗 1 次配額，成功修補 {len(success_files)} 個檔案。")
+                            st.balloons()
                     except Exception as e:
-                        st.error(f"全域維修故障: {e}")
-    else:
-        st.error("❌ 找不到腳本路徑。")
+                        st.error(f"全域重構故障: {e}")
+
 # =========================================================
-# 🔮 頻道：虛空啟示 (Oracle) - 穩定導出版
+# 🔮 頻道：虛空啟示 (Oracle) - 核心協定自定義版
 # =========================================================
 elif channel == "🔮 虛空啟示 (Oracle)":
     st.title("🔮 虛空啟示：全域架構諮詢")
-    st.caption("🤖 AI 將分析當前專案的所有腳本 (.gd) 與日誌 (.md) 來回答妳的問題")
+    st.caption("🤖 AI 將根據妳自定義的「核心協定」分析專案檔案與日誌")
     st.markdown("---")
 
     # 1. 自動打撈路徑定位
     CURRENT_LOG_DIR = os.path.join(DATA_ROOT, current_p_name, "logs")
     script_path = config.get("local_script_path", "")
     
+    # --- 2. [新增] 手動更改 AI 提示詞配置區 ---
+    with st.expander("🛠️ 配置虛空核心協定 (System Prompt 自定義)"):
+        st.info("💡 妳可以在這裡手動更改 AI 的導師身份與行為邏輯。")
+        
+        # 預設範本：整合了黃銅蒸氣風格與架構檢查邏輯
+        default_system_instruction = f"""你現在是《{current_p_name}》專案的核心架構導師：【虛空奧術師】。
+風格應冷靜、精準且具備遊戲開發的前瞻性，語氣帶有一點黃銅蒸氣的機械感。
+
+[任務]
+請分析提供的代碼與日誌，回答開發者的提問，並找出邏輯斷層或優化空間。
+
+[啟示指南]
+1. 實戰建議：針對 Godot (GDScript) 提供具體代碼修改方向。
+2. 邏輯檢查：若發現日誌紀錄與現有腳本邏輯衝突，請務必指出。
+3. 風格對齊：請考慮「黃銅蒸氣」與「末世」的遊戲背景設定。"""
+
+        # 使用 session_state 保留妳手動修改的內容
+        if "custom_oracle_prompt" not in st.session_state:
+            st.session_state.custom_oracle_prompt = default_system_instruction
+
+        # 核心編輯接口
+        st.session_state.custom_oracle_prompt = st.text_area(
+            "編輯導師協議 (System Instruction)", 
+            value=st.session_state.custom_oracle_prompt, 
+            height=250,
+            help="這段文字決定了 AI 的思考邏輯與回應風格。"
+        )
+        if st.button("♻️ 重置為預設協議"):
+            st.session_state.custom_oracle_prompt = default_system_instruction
+            st.rerun()
+
     # 顯示當前知識庫範圍
     with st.expander("📂 檢視 AI 當前載入的知識庫範圍"):
-        all_files = []
+        all_files_list = []
         if os.path.exists(CURRENT_LOG_DIR):
             md_files = [f for f in os.listdir(CURRENT_LOG_DIR) if f.endswith(".md")]
-            all_files.extend([f"日誌: {f}" for f in md_files])
+            all_files_list.extend([f"日誌: {f}" for f in md_files])
         if script_path and os.path.exists(script_path):
             gd_files = [f for f in os.listdir(script_path) if f.endswith(".gd")]
-            all_files.extend([f"腳本: {f}" for f in gd_files])
-        st.write(all_files if all_files else "目前無載入任何檔案")
+            all_files_list.extend([f"腳本: {f}" for f in gd_files])
+        st.write(all_files_list if all_files_list else "目前無載入任何檔案")
 
-    # 2. 諮詢介面
+    # 3. 提問介面
     st.subheader("❓ 向架構導師提問")
-    user_query = st.text_area("例如：『根據目前的魚叉腳本和日誌紀錄，我該如何優化海上戰鬥的節奏？』", height=120)
-    uploaded_pdf = st.file_uploader("若有特定的診斷報告 PDF，也可一併導入參考", type=['pdf'])
+    user_query = st.text_area("提問內容", placeholder="例如：『根據目前的魚叉腳本，如何加入連鎖閃電效果？』", height=100)
+    uploaded_pdf = st.file_uploader("導入 PDF 參考", type=['pdf'], key="oracle_pdf")
 
-    # 核心：使用 Session State 儲存 AI 回答
     if "oracle_response" not in st.session_state:
         st.session_state.oracle_response = ""
 
     if st.button("🌌 啟動虛空連結", type="primary", use_container_width=True):
         if not user_query:
-            st.warning("請先輸入妳的疑問。")
+            st.warning("請先輸入疑問。")
         elif not FINAL_KEY:
             st.error("❌ 金鑰未配置。")
         else:
-            with st.spinner("AI 正在翻閱所有日誌與腳本中..."):
+            with st.spinner("AI 正在解析全域資料並套用自定義協定..."):
                 try:
-                    # 提取 PDF 內容
-                    pdf_text = ""
-                    if uploaded_pdf:
-                        pdf_reader = PyPDF2.PdfReader(uploaded_pdf)
-                        for page in pdf_reader.pages:
-                            pdf_text += page.extract_text()
-
-                    # 提取日誌與腳本
+                    # A. 提取 Context (加入內容切片防止過載)
                     context_data = []
                     if os.path.exists(CURRENT_LOG_DIR):
                         for f in os.listdir(CURRENT_LOG_DIR):
                             if f.endswith(".md"):
                                 with open(os.path.join(CURRENT_LOG_DIR, f), "r", encoding="utf-8") as file:
-                                    context_data.append(f"--- 日誌 {f} ---\n{file.read()}")
+                                    context_data.append(f"--- 日誌 {f} ---\n{file.read()[:3000]}")
                     
                     if script_path and os.path.exists(script_path):
                         for f in os.listdir(script_path):
                             if f.endswith(".gd"):
                                 with open(os.path.join(script_path, f), "r", encoding="utf-8") as file:
-                                    context_data.append(f"--- 腳本 {f} ---\n{file.read()}")
+                                    context_data.append(f"--- 腳本 {f} ---\n{file.read()[:5000]}")
 
                     full_context = "\n\n".join(context_data)
                     
-                    # 呼叫 AI 模型
+                    # 提取 PDF
+                    pdf_text = ""
+                    if uploaded_pdf:
+                        pdf_reader = PyPDF2.PdfReader(uploaded_pdf)
+                        for page in pdf_reader.pages:
+                            pdf_text += (page.extract_text() or "") + "\n"
+                    
+                    # B. 呼叫 AI (注入手動修改後的提示詞)
+                    genai.configure(api_key=FINAL_KEY, transport="rest")
                     model = genai.GenerativeModel(AI_MODEL)
-                    oracle_prompt = f"""
-                    你是一位資深的遊戲開發架構師。請分析《{current_p_name}》的數據：
-                    [參考數據] {full_context}
-                    [PDF 補充] {pdf_text}
-                    [問題] {user_query}
-                    """
-                    response = model.generate_content(oracle_prompt)
-                    # 將結果存入 Session，防止重新運行時消失
+                    
+                    # 最終組裝：[自定義協定] + [知識庫] + [PDF] + [問題]
+                    final_oracle_prompt = f"""
+{st.session_state.custom_oracle_prompt}
+
+[專案全域知識庫]
+{full_context[:15000]}
+
+[PDF 補充資料]
+{pdf_text[:5000]}
+
+[開發者當前疑問]
+{user_query}
+"""
+                    response = model.generate_content(final_oracle_prompt)
                     st.session_state.oracle_response = response.text
                     st.session_state.last_query = user_query
+                    
                 except Exception as e:
-                    st.error(f"連線中斷: {e}")
+                    st.error(f"虛空連線中斷: {e}")
 
-    # 3. 顯示啟示與導出 (移出按鈕區塊外)
+    # 4. 顯示與導出
     if st.session_state.oracle_response:
         st.markdown("---")
-        st.markdown("### 🔮 啟示內容：")
+        st.subheader("🔮 虛空啟示內容")
         st.info(st.session_state.oracle_response)
         
-        # 建立導出路徑
-        from weasyprint import HTML
-        output_dir = os.path.join(DATA_ROOT, current_p_name, "logs")
-        pdf_filename = f"Oracle_{datetime.datetime.now().strftime('%m%d_%H%M')}.pdf"
-        pdf_path = os.path.join(output_dir, pdf_filename)
+        # PDF 導出
+        try:
+            from weasyprint import HTML
+            output_dir = os.path.join(DATA_ROOT, current_p_name, "logs")
+            pdf_filename = f"Oracle_{datetime.datetime.now().strftime('%m%d_%H%M')}.pdf"
+            pdf_path = os.path.join(output_dir, pdf_filename)
 
-        # 生成 PDF
-        html_content = f"""
-        <html><body style="font-family: sans-serif; padding: 20px;">
-            <h1 style="color: #d4af37;">餘燼啟示錄：開發建議</h1>
-            <p><b>諮詢問題：</b> {st.session_state.get('last_query', '未知')}</p>
-            <hr>
-            <div style="white-space: pre-wrap; line-height: 1.6;">{st.session_state.oracle_response}</div>
-            <p style="font-size: 10px; color: #999; margin-top: 50px;">由 小白龍 19GB 核心主機生成</p>
-        </body></html>
-        """
-        
-        if st.button("📥 準備導出檔案", use_container_width=True):
-            HTML(string=html_content).write_pdf(pdf_path)
-            st.success(f"✅ 啟示錄已歸檔至 logs 資料夾")
+            html_content = f"""
+            <html><body style="font-family: sans-serif; padding: 20px;">
+                <h1 style="color: #d4af37;">餘燼啟示錄：自定義架構報告</h1>
+                <p><b>諮詢問題：</b> {st.session_state.get('last_query', '未知')}</p>
+                <hr>
+                <div style="white-space: pre-wrap; line-height: 1.6;">{st.session_state.oracle_response}</div>
+                <p style="font-size: 10px; color: #999; margin-top: 50px;">由 小白龍 19GB 核心主機生成 | 核心型號: {AI_MODEL}</p>
+            </body></html>
+            """
             
-            with open(pdf_path, "rb") as f:
-                st.download_button(
-                    label="💾 點此下載 PDF 啟示錄",
-                    data=f,
-                    file_name=pdf_filename,
-                    mime="application/pdf",
-                    use_container_width=True
-                )
+            if st.button("📥 將啟示歸檔為 PDF", use_container_width=True):
+                HTML(string=html_content).write_pdf(pdf_path)
+                st.success(f"✅ 啟示錄已存至：{pdf_path}")
+                with open(pdf_path, "rb") as f:
+                    st.download_button("💾 下載 PDF 檔案", f, file_name=pdf_filename, mime="application/pdf", use_container_width=True)
+        except Exception as e:
+            st.warning(f"導出功能暫不可用：{e}")
 
     st.divider()
-    st.caption("📜 虛空啟示錄：當代碼陷入沉寂，導師將翻開舊日的 log，指引妳重回那座未竟的發射台。")
+    st.caption("📜 虛空啟示錄：妳已獲得核心協議的修改權限。現在，導師的靈魂將隨妳的意念而重塑。")
 
 # =========================================================
 # 📜 頻道：航行日誌 (Log) - 跨專案對接與 AI 聯動版
