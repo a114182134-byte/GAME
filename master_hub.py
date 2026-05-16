@@ -295,29 +295,27 @@ for d in [LOG_DIR, MEDIA_DIR, ARCHIVE_DIR]:
         os.makedirs(d)
         print(f"🛠️ 物理空間已重構：{d}")
 
-# =========================================================
-# 📸 頻道：📸 素材打撈 (Media) - PDF 規範與多模態融合版
-# =========================================================
+
 if channel == "📸 素材打撈 (Media)":
-        st.title("📸 殘留影像與波形打撈")
-        st.caption("🤖 透過自定義「核心協議」深度解析影像、聲波與 PDF 規範")
-        st.markdown("---")
+    st.title("📸 殘留影像與波形打撈")
+    st.caption("🤖 透過自定義「核心協議」深度解析影像、聲波與 PDF 規範")
+    st.markdown("---")
 
-        # ⚡ 核心優化：發射站識別
-        ua = st.context.headers.get("User-Agent", "").lower()
-        dev_type = "行動裝置" if "mobile" in ua else "核心主機"
+    # ⚡ 核心優化：發射站識別 (acer 主機環境適配)
+    ua = st.context.headers.get("User-Agent", "").lower()
+    dev_type = "行動裝置" if "mobile" in ua else "核心主機"
+    
+    col_loc, col_info = st.columns([1, 2])
+    with col_loc:
+        station_origin = st.selectbox("📍 當前發射站", ["總部 (acer)", "台北站", "新竹站", "台南站"])
+    with col_info:
+        st.caption(f"📡 設備類型：`{dev_type}` | 接入網址：`{st.context.headers.get('Host')}`")
+
+    # --- [區塊 A] 配置打撈核心協議 (System Instruction) ---
+    with st.expander("🛠️ 配置打撈核心協議 (長期底層規則)", expanded=False):
+        st.info("💡 這裡定義 AI 的「性格與職責」，作為解析時不可變動的指令。")
         
-        col_loc, col_info = st.columns([1, 2])
-        with col_loc:
-            station_origin = st.selectbox("📍 當前發射站", ["總部 (acer)", "台北站", "新竹站", "台南站"])
-        with col_info:
-            st.caption(f"📡 設備類型：`{dev_type}` | 接入網址：`{st.context.headers.get('Host')}`")
-
-        # --- [核心功能] 手動更改 AI 提示詞配置區 ---
-        with st.expander("🛠️ 配置打撈核心協議 (System Prompt 自定義)"):
-            st.info("💡 這裡定義 AI 如何「解讀」妳上傳的影像與聲音。")
-            
-            default_media_instruction = f"""你現在是《{current_p_name}》專案的【素材打撈官】。
+        default_media_instruction = f"""你現在是《{current_p_name}》專案的【素材打撈官】。
 妳擅長從混亂的影像與波形中提取符合「黃銅蒸氣」與「末世重生」美學的開發靈感。
 
 [任務]
@@ -325,148 +323,164 @@ if channel == "📸 素材打撈 (Media)":
 
 [啟示指南]
 1. 視覺拆解：分析構圖、色調是否符合專案設定。
-2. 聲學轉譯：若有音訊，將其描述為具體的遊戲環境音效需求。
+2. 聲學轉譯：將音訊描述為具體的遊戲環境音效需求（如：金屬摩擦聲、蒸汽噴發聲）。
 3. 規範對齊：嚴格遵守 PDF 提供的視覺或敘事準則。"""
 
-            if "custom_media_prompt" not in st.session_state:
-                st.session_state.custom_media_prompt = default_media_instruction
+        if "custom_media_prompt" not in st.session_state:
+            st.session_state.custom_media_prompt = default_media_instruction
 
-            st.session_state.custom_media_prompt = st.text_area(
-                "編輯打撈協議 (System Instruction)", 
-                value=st.session_state.custom_media_prompt, 
-                height=200,
-                key="media_prompt_area"
-            )
-            if st.button("♻️ 重置打撈協議"):
-                st.session_state.custom_media_prompt = default_media_instruction
-                st.rerun()
-
-        # 1. 指令與 PDF 知識注入區
-        st.subheader("🧠 靈感指令與 PDF 規範")
-        col_text, col_pdf = st.columns([2, 1])
-        
-        with col_text:
-            u_text = st.text_area("靈感咒語 / 分析需求", placeholder="例如：分析這張草圖，並根據 PDF 規範建議改進方向...", height=120)
-        
-        with col_pdf:
-            u_pdf = st.file_uploader("📋 導入規範 (PDF)", type=['pdf'], key="media_pdf_up")
-            pdf_context = ""
-            if u_pdf:
-                pdf_reader = PyPDF2.PdfReader(u_pdf)
-                for page in pdf_reader.pages:
-                    pdf_context += (page.extract_text() or "") + "\n"
-                st.success(f"✅ 規範已載入")
-
-        st.subheader("🎤 語音靈感捕捉")
-        from audio_recorder_streamlit import audio_recorder
-        audio_bytes = audio_recorder(
-            text=f"來自【{station_origin}】的通訊",
-            recording_color="#e74c3c", neutral_color="#D4AF37", icon_size="2x"
+        st.session_state.custom_media_prompt = st.text_area(
+            "編輯核心協議 (System Instruction)", 
+            value=st.session_state.custom_media_prompt, 
+            height=200,
+            key="media_prompt_area"
         )
+        if st.button("♻️ 重置協議"):
+            st.session_state.custom_media_prompt = default_media_instruction
+            st.rerun()
 
-        if audio_bytes:
-            if "last_mic_data" not in st.session_state or st.session_state.last_mic_data != audio_bytes:
-                timestamp = datetime.datetime.now().strftime('%m%d_%H%M%S')
-                mic_path = os.path.join(MEDIA_DIR, f"mic_{station_origin}_{timestamp}.wav")
-                with open(mic_path, "wb") as f: f.write(audio_bytes)
-                st.session_state.last_mic_data = audio_bytes 
-                st.sidebar.success(f"🎙️ 聲波已入庫")
-            st.audio(audio_bytes, format="audio/wav")
+    # --- [區塊 B] 當前靈感需求與 PDF 知識注入 ---
+    st.subheader("🧠 靈感指令與 PDF 規範")
+    col_text, col_pdf = st.columns([2, 1])
+    
+    with col_text:
+        u_text = st.text_area("✨ 當前靈感咒語 / 分析需求", placeholder="例如：分析這張草圖...", height=120)
+    
+    with col_pdf:
+        u_pdf = st.file_uploader("📋 導入規範 (PDF)", type=['pdf'], key="media_pdf_up")
+        pdf_context = ""
+        if u_pdf:
+            import PyPDF2
+            pdf_reader = PyPDF2.PdfReader(u_pdf)
+            for page in pdf_reader.pages:
+                pdf_context += (page.extract_text() or "") + "\n"
+            st.success(f"✅ 規範內容已擷取")
 
-        st.divider()
+    # --- [區塊 C] 多媒體素材擷取區 ---
+    st.subheader("🎤 語音靈感捕捉")
+    from audio_recorder_streamlit import audio_recorder
+    audio_bytes = audio_recorder(
+        text=f"來自【{station_origin}】的通訊",
+        recording_color="#e74c3c", neutral_color="#D4AF37", icon_size="2x"
+    )
+
+    if audio_bytes:
+        if "last_mic_data" not in st.session_state or st.session_state.last_mic_data != audio_bytes:
+            timestamp = datetime.datetime.now().strftime('%m%d_%H%M%S')
+            mic_path = os.path.join(MEDIA_DIR, f"mic_{station_origin}_{timestamp}.wav")
+            with open(mic_path, "wb") as f: f.write(audio_bytes)
+            st.session_state.last_mic_data = audio_bytes 
+            st.sidebar.success(f"🎙️ 聲波已歸檔")
+        st.audio(audio_bytes, format="audio/wav")
+
+    st.divider()
+    
+    col_up1, col_up2 = st.columns(2)
+    with col_up1:
+        u_img = st.file_uploader("🖼️ 影像打撈", type=['png', 'jpg', 'jpeg', 'webp'])
+        if u_img:
+            from PIL import Image
+            img = Image.open(u_img)
+            st.image(img, caption="🚀 待處理影像預覽", use_column_width=True)
+    with col_up2:
+        u_audio = st.file_uploader("🎵 音訊打撈", type=['mp3', 'wav', 'ogg', 'm4a'])
+        if u_audio: st.audio(u_audio)
+
+    # --- [區塊 D] 執行動作 ---
+    st.markdown("---")
+    col_btn1, col_btn2 = st.columns(2)
+    with col_btn1:
+        analyze_btn = st.button("🚀 啟動深度解析 (Gemini)", use_container_width=True)
+    with col_btn2:
+        draw_btn = st.button("🎨 請求虛空重塑 (Imagen 3)", use_container_width=True, type="primary")
+
+    # --- 邏輯 A：Gemini 1.5 Pro 深度解析 ---
+    if analyze_btn:
+        if not (u_img or u_audio or u_text or audio_bytes or u_pdf):
+            st.warning("📡 數據不足，請提供素材、靈感或 PDF 規範。")
+        else:
+            with st.spinner("正在對齊核心協議進行打撈報告..."):
+                try:
+                    import google.generativeai as genai
+                    full_system_instruction = f"{st.session_state.custom_media_prompt}\n\n[專案 PDF 規範知識庫]：\n{pdf_context[:8000]}"
+                    user_payload = []
+                    current_task = u_text if u_text else "請根據核心協議與 PDF 規範分析此素材。"
+                    user_payload.append(f"【當前任務描述】：{current_task}")
+                    if u_img: user_payload.append(img)
+                    if audio_bytes: user_payload.append({"mime_type": "audio/wav", "data": audio_bytes})
+                    if u_audio: 
+                        u_audio.seek(0)
+                        user_payload.append({"mime_type": u_audio.type, "data": u_audio.read()})
+                    genai.configure(api_key=FINAL_KEY)
+                    model = genai.GenerativeModel(model_name=AI_MODEL, system_instruction=full_system_instruction)
+                    response = model.generate_content(user_payload)
+                    st.markdown("### 📝 素材打撈分析報告")
+                    st.info(response.text)
+                except Exception as e:
+                    st.error(f"❌ 解析引擎故障: {str(e)}")
+
+# --- 邏輯 B：Vertex AI Imagen 3 具現化 (全變數注入穩定版) ---
+    if draw_btn:
+        # 1. 立即注入所有必要變數 (防止 NameError)
+        current_style = "Brass steampunk, post-apocalyptic rusted metal aesthetic"
+        default_template = (
+            "A horizontal sprite sheet for a 2D game, 10 distinct animation frames in a single row. "
+            "Subject: {subject}. Orientation: 3/4 view, body turned but face looking at camera. "
+            "Action: A complete sequential walking cycle animation. "
+            "Style: {style}, Flat 2D vector art, clean outlines, plain neutral background."
+        )
+        # 這裡確保 ui_template 一定有值
+        ui_template = default_template 
         
-        # 2. 檔案上傳預覽
-        col_up1, col_up2 = st.columns(2)
-        with col_up1:
-            u_img = st.file_uploader("🖼️ 影像打撈", type=['png', 'jpg', 'jpeg', 'webp'])
-            if u_img:
-                img = Image.open(u_img)
-                st.image(img, caption="🚀 待處理影像預覽", use_column_width=True)
+        st.toast("🎨 虛空算力調動中...")
 
-        with col_up2:
-            u_audio = st.file_uploader("🎵 音訊打撈", type=['mp3', 'wav', 'ogg', 'm4a'])
-            if u_audio: st.audio(u_audio)
+        if not u_text:
+            st.warning("🔮 請在「靈感咒語」中描述要重塑的角色！")
+        else:
+            quota_id = "project-facfcef1-7308-4805-b0c"
+            with st.spinner("正在執行重塑協議..."):
+                try:
+                    import vertexai
+                    from vertexai.preview.vision_models import ImageGenerationModel
+                    import datetime
+                    
+                    # 再次確認路徑存在
+                    if not os.path.exists(MEDIA_DIR):
+                        os.makedirs(MEDIA_DIR)
 
-        st.markdown("---")
-        
-        # 3. 處理按鈕
-        col_btn1, col_btn2 = st.columns(2)
-        with col_btn1:
-            analyze_btn = st.button("🚀 啟動解析 (依據自定義協議)", use_container_width=True)
-        with col_btn2:
-            draw_btn = st.button("🎨 請求虛空重塑 (Imagen 3)", use_container_width=True)
-
-        # --- 邏輯處理 A：Gemini 解析 ---
-        if analyze_btn:
-            if not (u_img or u_audio or u_text or audio_bytes or u_pdf):
-                st.warning("📡 數據不足，請提供素材、指令或規範。")
-            else:
-                with st.spinner("正在套用自定義協議進行打撈..."):
-                    try:
-                        content_payload = []
-                        # 注入【自定義協議】與【PDF】
-                        full_instr = f"{st.session_state.custom_media_prompt}\n\n[PDF 規範內容]：\n{pdf_context[:5000]}"
-                        content_payload.append(full_instr)
+                    vertexai.init(project=quota_id, location="us-central1")
+                    v_model = ImageGenerationModel.from_pretrained("imagen-3.0-generate-001")
+                    
+                    # 2. 安全地組合咒語
+                    final_prompt = ui_template.format(subject=u_text, style=current_style)
+                    st.caption(f"🚀 送出咒語：`{final_prompt}`")
+                    
+                    # 執行具現化
+                    response = v_model.generate_images(prompt=final_prompt, number_of_images=1)
+                    
+                    # 3. 核心修正：使用 response.images
+                    if response and response.images:
+                        generated_img = response.images[0]
                         
-                        # 注入指令與媒體
-                        content_payload.append(f"[用戶當前指令]：{u_text if u_text else '綜合分析媒體內容。'}")
-                        if u_img: content_payload.append(img)
-                        if audio_bytes: content_payload.append({"mime_type": "audio/wav", "data": audio_bytes})
-                        if u_audio: 
-                            u_audio.seek(0)
-                            content_payload.append({"mime_type": u_audio.type, "data": u_audio.read()})
-
-                        genai.configure(api_key=FINAL_KEY, transport="rest")
-                        model = genai.GenerativeModel(AI_MODEL)
-                        response = model.generate_content(content_payload)
+                        # 產生唯一時間戳檔名
+                        ts = datetime.datetime.now().strftime('%H%M%S')
+                        img_filename = f"reborn_{ts}.png"
+                        img_path = os.path.join(MEDIA_DIR, img_filename)
                         
-                        st.markdown("### 📝 打撈報告")
-                        st.info(response.text)
+                        # 保存影像到本地
+                        generated_img.save(location=img_path, include_generation_parameters=False)
                         
-                        # 紀錄日誌
-                        log_dir = os.path.join(DATA_ROOT, current_p_name, "logs")
-                        os.makedirs(log_dir, exist_ok=True)
-                        log_path = os.path.join(log_dir, f"Media_Salvage_{datetime.datetime.now().strftime('%m%d_%H%M')}.md")
-                        with open(log_path, "w", encoding="utf-8") as f:
-                            f.write(f"# 媒體打撈報告\n\n### 核心協議\n{st.session_state.custom_media_prompt}\n\n### 解析結果\n{response.text}")
-                        st.success(f"✅ 解析結果已同步至專案日誌")
-                    except Exception as e:
-                        st.error(f"❌ 引擎異常: {str(e)}")
-    # --- 邏輯 B：Vertex AI Imagen 3 生成 ---
-        if draw_btn:
-            current_id = st.session_state.get("gcp_project_id")
-            if not current_id:
-                st.warning("⚠️ 虛空航道未定位！請先在側邊欄輸入『GCP Project ID』。")
-            elif not u_text:
-                st.warning("🔮 缺少咒語！請在指令核心輸入描述。")
-            else:
-                with st.spinner("正在調動 Vertex AI 進行物理重塑..."):
-                    try:
-                        from vertexai.preview.vision_models import ImageGenerationModel
-                        imagen_model = ImageGenerationModel.from_pretrained("imagen-3.0-generate-001")
+                        st.divider()
+                        # 顯示影像
+                        st.image(img_path, caption=f"✨ 影像重塑成功 | 檔案編號：{img_filename}")
+                        st.sidebar.success(f"🎨 素材已就緒: {img_filename}")
+                    else:
+                        st.error("⚠️ 具現化失敗：AI 未能產出有效影像。")
+                        st.info("💡 提示：可能是安全過濾封鎖了內容，請嘗試調整「靈感咒語」。")
                         
-                        # 如果有 PDF 內容，擷取關鍵字加入咒語
-                        style_hint = "Brass steampunk, post-apocalyptic."
-                        if pdf_context:
-                            style_hint += f" Follow style guide: {pdf_context[:200]}"
-                            
-                        full_prompt = f"Style: {style_hint}. Subject: {u_text}"
-                        
-                        images = imagen_model.generate_images(
-                            prompt=full_prompt,
-                            number_of_images=1,
-                            aspect_ratio="1:1"
-                        )
-                        
-                        if images:
-                            timestamp = datetime.datetime.now().strftime('%m%d_%H%M%S')
-                            img_name = f"reborn_{station_origin}_{timestamp}.png"
-                            img_path = os.path.join(MEDIA_DIR, img_name)
-                            images[0].save(location=img_path, include_generation_parameters=False)
-                            st.image(img_path, caption=f"✨ 虛空重塑完成：{u_text}")
-                            st.sidebar.success(f"🎨 影像已入庫")
-                    except Exception as e:
-                        st.error(f"❌ 影像重塑失敗：{str(e)}")
+                except Exception as e:
+                    # 捕捉所有底層錯誤，直接顯示在 UI 上方便調試
+                    st.error(f"❌ 具現化底層故障: {str(e)}")
 
 elif channel == "🔧 齒輪重組 (Script)":
     st.title("🔧 邏輯齒輪精密重組")
@@ -1505,109 +1519,378 @@ elif channel == "🕹️ 遊戲開發總覽":
                 
                 st.markdown('</div>', unsafe_allow_html=True)
                 st.write("") # 間距
-# =========================================================
-# 🤖 頻道：核心腳本鍛造爐 (Script Forge) - 全域重塑版
-# =========================================================
+
 elif channel == "🤖 腳本鍛造":
-    st.title("🤖 核心腳本鍛造爐：全域重塑")
-    st.caption("⚙️ 支援「全新鍛造」與「既有重塑」。AI 可讀取專案內所有腳本並執行邏輯更改。")
-    st.markdown("---")
+    st.title("🛡️ 核心鍛造爐：絕對防線與報告版")
+    st.caption("⚙️ 建議路徑設為「緩衝資料夾」，寫入前將自動備份至 Forge_Backups。")
 
-    # --- 1. 定位腳本庫 ---
-    script_folder = os.path.join(DATA_ROOT, current_p_name, "scripts")
-    if not os.path.exists(script_folder):
-        os.makedirs(script_folder)
-    
-    existing_scripts = [f for f in os.listdir(script_folder) if not f.startswith(".")]
-
-    # --- 2. 模式切換：全新 vs 修改 ---
-    forge_mode = st.radio("選擇操作模式", ["✨ 全新邏輯鍛造", "🔧 既有腳本重塑"], horizontal=True)
-
-    selected_script_content = ""
-    target_file_name = ""
-
-    if forge_mode == "🔧 既有腳本重塑":
-        if not existing_scripts:
-            st.info("📡 腳本庫空虛，請先切換至全新鍛造模式。")
-        else:
-            target_file_name = st.selectbox("選擇要重塑的腳本", options=existing_scripts)
-            # 讀取現有內容
-            with open(os.path.join(script_folder, target_file_name), "r", encoding="utf-8") as f:
-                selected_script_content = f.read()
-            with st.expander("📄 查看原始代碼內容"):
-                st.code(selected_script_content)
+    # --- 1. 路徑自癒讀取 ---
+    if os.path.exists(CONFIG_FILE):
+        with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+            all_configs = json.load(f)
+        current_config = all_configs.get(current_p_name, {})
     else:
-        col_type, col_name = st.columns([1, 2])
-        with col_type:
-            st_type = st.selectbox("腳 from 選項", [".gd", ".py", ".js", ".json", ".md"])
-        with col_name:
-            target_file_name = st.text_input("新檔案名稱", placeholder="harpoon.gd")
+        current_config = {}
 
-    # --- 3. 文獻參考 (選填) ---
-    referenced_pdf = st.file_uploader("📚 參考外部 PDF 文獻 (可選)", type=["pdf"])
-    pdf_context = ""
-    if referenced_pdf:
-        import PyPDF2
-        reader = PyPDF2.PdfReader(referenced_pdf)
-        for page in reader.pages:
-            pdf_context += (page.extract_text() or "") + "\n"
+    physical_path = current_config.get("local_script_path", "")
+    
+    if physical_path and os.path.isdir(physical_path):
+        script_folder = physical_path
+        st.sidebar.success(f"🔗 實體路徑已連線")
+        st.sidebar.caption(f"📍 座標: `{physical_path}`")
+    else:
+        script_folder = os.path.join(DATA_ROOT, current_p_name, "scripts")
+        os.makedirs(script_folder, exist_ok=True)
+        st.sidebar.warning("📡 使用預設儲存區 (未偵測到實體路徑)")
 
-    # --- 4. 修改需求 ---
-    st.subheader("🛠️ 修改/編寫需求")
-    instruction = st.text_area("請輸入妳的指令：", placeholder="例如：將原本的魚叉發射改為追蹤模式，並參考 PDF 的公式調整速度...", height=150)
+    # 初始化備份與日誌目錄
+    backup_root = os.path.join(DATA_ROOT, current_p_name, "Forge_Backups")
+    os.makedirs(backup_root, exist_ok=True)
+    log_dir = os.path.join(DATA_ROOT, current_p_name, "logs")
+    os.makedirs(log_dir, exist_ok=True)
 
-    # --- 5. 啟動重塑引擎 ---
-    if st.button("🔥 啟動全域重塑協定", type="primary", use_container_width=True):
-        if not target_file_name or not instruction:
-            st.warning("📡 報告架構師：檔案名稱與指令不可為空。")
-        elif not FINAL_KEY:
-            st.error("❌ 金鑰失效。")
+    # --- 2. 配置鍛造協議 ---
+    with st.expander("🛠️ 配置鍛造核心協議 (System Instruction)"):
+        default_forge_instr = f"""你現在是《{current_p_name}》的資深 Godot 架構師。
+[任務] 撰寫高品質、結構嚴謹且無雜質的 GDScript 邏輯代碼。
+[規範] 務必符合 Godot 4.x 語法規範。直接輸出純代碼內容，絕對不要 Markdown 標籤，絕對不要任何解釋文字。"""
+        if "custom_forge_prompt" not in st.session_state:
+            st.session_state.custom_forge_prompt = default_forge_instr
+        st.session_state.custom_forge_prompt = st.text_area("編輯導師協議", value=st.session_state.custom_forge_prompt, height=120)
+
+    # --- 3. 模式與檔案設定 ---
+    forge_mode = st.radio("選擇操作模式", ["✨ 全新實體鍛造", "🔧 既有檔案重塑"], horizontal=True)
+    existing_files = [f for f in os.listdir(script_folder) if not f.startswith(".")]
+
+    base_name = ""
+    target_file = ""
+
+    if forge_mode == "🔧 既有檔案重塑":
+        if not existing_files:
+            st.info("📡 目錄空虛，請先切換至全新鍛造。")
         else:
-            try:
-                with st.spinner(f"🚀 正在對 {target_file_name} 進行邏輯超頻..."):
+            target_file = st.selectbox("選擇要重塑的檔案", options=existing_files)
+            base_name = target_file.split(".")[0]
+            with open(os.path.join(script_folder, target_file), "r", encoding="utf-8") as f:
+                selected_content = f.read()
+            with st.expander("📄 原始內容預覽"): st.code(selected_content)
+    else:
+        c_name, c_batch = st.columns([2, 1])
+        with c_name:
+            base_name = st.text_input("💎 核心名稱", placeholder="例如：HarpoonCan")
+        with c_batch:
+            is_batch = st.checkbox("批量模式")
+        
+        suffixes = [""] if not is_batch else [s.strip() for s in st.text_input("後綴 (逗號隔開)", value="In,Out,Atk").split(",")]
+
+    # --- 4. 指令與需求 ---
+    import PyPDF2 
+    referenced_pdf = st.file_uploader("📚 參考規範 PDF (可選)", type=["pdf"])
+    pdf_txt = ""
+    if referenced_pdf:
+        reader = PyPDF2.PdfReader(referenced_pdf)
+        for page in reader.pages: pdf_txt += (page.extract_text() or "") + "\n"
+    
+    instruction = st.text_area("鍛造指令 (針對 GD 邏輯或 TSCN 節點結構描述)", placeholder="描述功能邏輯或場景節點需求...", height=100)
+
+    # --- 5. 🌲 階段 1 核心分家控制台 ───
+    st.markdown("---")
+    st.subheader("🌲 TSCN 場景樹配置工廠")
+    
+    # 🌟 核心分家切換器
+    tscn_build_method = st.radio(
+        "選擇場景建立手段", 
+        ["🤖 AI 智能推演場景樹", "🌲 純手動精準強植構造"], 
+        horizontal=True, 
+        help="手動模式下完全不耗費 AI 額度，由妳定義絕對結構。"
+    )
+    
+    c_sub_sc, c_config_zone = st.columns([1, 1])
+    
+    with c_sub_sc:
+        tscn_pool = [f for f in os.listdir(script_folder) if f.endswith(".tscn")]
+        selected_sub_scene = st.selectbox("📦 嵌套現有子場景 (PackedScene)", options=["無"] + tscn_pool)
+        
+    with c_config_zone:
+        if tscn_build_method == "🌲 純手動精準強植構造":
+            # 手動模式：解放自主控制權，自己選根節點與子節點
+            manual_root_type = st.selectbox(
+                "👑 選擇手動根節點型別",
+                options=["Area2D", "CharacterBody2D", "Node2D", "RigidBody2D", "StaticBody2D", "Timer", "Control", "Node"]
+            )
+            forced_nodes = st.multiselect(
+                "🌱 勾選要強植的直屬子節點",
+                options=["Sprite2D", "CollisionShape2D", "Timer", "VisibleOnScreenNotifier2D", "GPUParticles2D", "AudioStreamPlayer2D"],
+                default=[]
+            )
+        else:
+            st.info("💡 目前切換至 AI 模式，下方生成時將自動調用 Gemini 進行骨架與子節點推演。")
+            forced_nodes = []
+
+    st.markdown("---")
+    col_btn_tscn, col_btn_gd = st.columns(2)
+
+    import google.generativeai as genai
+    import shutil
+    import datetime
+
+# -----------------------------------------------------------------
+    # 【按鈕 A：📐 階段 1：物理重組 TSCN 場景樹（強制斷行完全體）】
+    # -----------------------------------------------------------------
+    with col_btn_tscn:
+        btn_tscn = st.button("📐 階段 1：物理重組 TSCN 場景樹", use_container_width=True)
+        if btn_tscn:
+            if not base_name or not instruction:
+                st.warning("📡 參數不足（需要核心名稱與指令）。")
+            else:
+                try:
+                    tscn_files = [f"{base_name}.tscn"] if forge_mode != "🔧 既有檔案重塑" else [target_file] if target_file.endswith(".tscn") else []
+                    if forge_mode == "✨ 全新實體鍛造" and is_batch:
+                        tscn_files = [f"{base_name}_{s}.tscn" for s in suffixes if s]
+
+                    if not tscn_files:
+                        st.error("❌ 當前重塑目標不是 .tscn 檔案。")
+                    else:
+                        for filename in tscn_files:
+                            save_path = os.path.join(script_folder, filename)
+                            node_name = filename.replace(".tscn", "")
+                            
+                            # 提取當前正在處理的後綴名稱
+                            current_suffix = ""
+                            if "_" in node_name:
+                                current_suffix = node_name.split("_")[-1]
+                            
+                            # 備份舊場景
+                            if os.path.exists(save_path):
+                                timestamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
+                                bak_path = os.path.join(backup_root, f"{filename}_{timestamp}.bak")
+                                shutil.copy2(save_path, bak_path)
+                                st.caption(f"🛡️ 已自動備份舊場景：`{filename}`")
+
+                            node_type = "Node2D"
+                            ai_recommended_nodes_content = ""
+                            
+                            # ⚡ AI 智能推演
+                            if tscn_build_method == "🤖 AI 智能推演場景樹":
+                                with st.spinner(f"🤖 AI 正在推演 `{filename}` 內部場景樹..."):
+                                    genai.configure(api_key=FINAL_KEY, transport="rest")
+                                    model = genai.GenerativeModel(AI_MODEL)
+                                    
+                                    suffix_context = f"目前正在批量生成中的特定子物件，其完整命名為：{node_name}，後綴代表的意思是：{current_suffix}。" if current_suffix else ""
+                                    
+                                    # 1. 精準逼問根型別
+                                    type_prompt = f"""
+你現在是 Godot 4 專家。
+整體需求：'{instruction}'
+{suffix_context}
+
+請根據當前的完整檔案名稱 '{node_name}' 與它的後綴，從以下型別中挑選一個最適合該後綴職責的根節點型別回傳：
+[Area2D, CharacterBody2D, RigidBody2D, StaticBody2D, Node2D, Timer, Control, Node]
+
+[絕對規範]：你只能回傳該型別的英文單字本身（例如：Area2D），絕對不要給我任何標點符號、任何 Markdown 粗體、任何解釋。
+"""
+                                    type_res = model.generate_content(type_prompt)
+                                    node_type = type_res.text.strip().replace("`", "").replace("*", "").replace(":", "").replace('"', '').replace("'", "")
+                                    if not node_type or len(node_type.split()) > 1:
+                                        node_type = "Node2D"
+                                    
+                                    st.caption(f"🤖 針對 `{filename}` ➔ AI 判定根型別為：`{node_type}`")
+
+                                    # 2. 索取子節點結構
+                                    ai_tree_prompt = f"""已知場景的根節點名稱會叫作 "{node_name}"，型別是 {node_type}。
+請為這個場景設計功能所需的子節點樹結構。
+[硬性規範]：
+1. 請直接輸出標準的 Godot 4 TSCN 節點格式，例如：[node name="我的名字" type="Node" parent="."]
+2. 直屬根節點的子節點，其 parent 屬性必須嚴格寫死為 parent="."
+3. 孫子輩以下的節點，其 parent 必須對齊上一層子節點的 name。
+4. 絕對不要重複建立名字叫作 "{node_name}" 且 parent="." 的節點！
+5. 絕對不要用 ```toml 或 ``` 包裹，不要任何解釋。
+"""
+                                    ai_tree_res = model.generate_content(ai_tree_prompt)
+                                    raw_ai_content = ai_tree_res.text.strip()
+                                    
+                                    # 🧼 【鐵血語法自癒重構引擎】
+                                    clean_lines = []
+                                    ai_fake_root_name = "" 
+                                    
+                                    for line in raw_ai_content.splitlines():
+                                        line_striped = line.strip()
+                                        
+                                        if line_striped.startswith("```") or line_striped in ["toml", "gdscript"]:
+                                            continue
+                                            
+                                        if line_striped.startswith("[node"):
+                                            if f'name="{node_name}"' in line_striped and 'parent="."' in line_striped:
+                                                continue
+                                            if f'name="{node_name}"' in line_striped and 'parent=' not in line_striped:
+                                                continue
+                                                
+                                            if 'parent="."' in line_striped and ai_fake_root_name == "":
+                                                if f'type="{node_type}"' in line_striped:
+                                                    try:
+                                                        ai_fake_root_name = line_striped.split('name="')[1].split('"')[0]
+                                                        continue 
+                                                    except:
+                                                        pass
+                                            
+                                            if ai_fake_root_name and f'parent="{ai_fake_root_name}"' in line_striped:
+                                                line_striped = line_striped.replace(f'parent="{ai_fake_root_name}"', 'parent="."')
+                                                
+                                            if ai_fake_root_name and f'parent="{ai_fake_root_name}/' in line_striped:
+                                                line_striped = line_striped.replace(f'parent="{ai_fake_root_name}/', 'parent="')
+                                                
+                                            clean_lines.append(line_striped)
+                                        elif line_striped and not line_striped.startswith("#"):
+                                            clean_lines.append(line_striped)
+                                    
+                                    # 💡 確保每一行後面都有獨立換行
+                                    ai_recommended_nodes_content = "\n".join(clean_lines)
+                            else:
+                                # 🌲 純手動模式
+                                node_type = manual_root_type
+                                st.caption(f"🌲 採用手動強植配置，根型別：`{node_type}`")
+
+                            # 🧠 物理組裝工廠（強制換行分軌）
+                            rebuilt_tscn_lines = []
+                            
+                            has_ext = (selected_sub_scene != "無" and selected_sub_scene != filename)
+                            if has_ext:
+                                rebuilt_tscn_lines.append('[gd_scene load_steps=2 format=3]')
+                                sub_node_name = selected_sub_scene.replace(".tscn", "")
+                                sub_scene_res_path = f"res://scripts/{selected_sub_scene}"
+                                sub_ext_id = f"PackedScene_{sub_node_name}"
+                                rebuilt_tscn_lines.append(f'[ext_resource type="PackedScene" path="{sub_scene_res_path}" id="{sub_ext_id}"]')
+                            else:
+                                rebuilt_tscn_lines.append('[gd_scene format=3]')
+                            
+                            # 空一行，符合 Godot 規範
+                            rebuilt_tscn_lines.append('')
+                            # 寫入正統根節點
+                            rebuilt_tscn_lines.append(f'[node name="{node_name}" type="{node_type}"]')
+                            
+                            # 手動模式子節點
+                            if tscn_build_method == "🌲 純手動精準強植構造" and forced_nodes:
+                                rebuilt_tscn_lines.append('')
+                                for native_node in forced_nodes:
+                                    rebuilt_tscn_lines.append(f'[node name="{native_node}" type="{native_node}" parent="."]')
+                            
+                            # AI 模式子節點（確保安全解開並逐行加入）
+                            if tscn_build_method == "🤖 AI 智能推演場景樹" and ai_recommended_nodes_content.strip():
+                                rebuilt_tscn_lines.append('')
+                                for sub_line in ai_recommended_nodes_content.splitlines():
+                                    if sub_line.strip():
+                                        rebuilt_tscn_lines.append(sub_line.strip())
+                                
+                            # 子場景嵌套
+                            if has_ext:
+                                rebuilt_tscn_lines.append('')
+                                rebuilt_tscn_lines.append(f'[node name="{sub_node_name}" instance=ExtResource("{sub_ext_id}")]')
+                            
+                            # 💡 終極安全手段：每一行後面絕對強制補上 \n，且絕對不用會吃掉換行的 strip()
+                            final_tscn_raw = ""
+                            for line in rebuilt_tscn_lines:
+                                final_tscn_raw += line + "\n"
+                            
+                            # 寫入硬碟
+                            with open(save_path, "w", encoding="utf-8") as f:
+                                f.write(final_tscn_raw)
+                            
+                            st.success(f"✅ 場景樹物理重組完成：`{filename}` (根節點: {node_type})")
+                        st.balloons()
+                except Exception as e:
+                    st.error(f"❌ 場景生成失敗: {str(e)}")
+
+    # -----------------------------------------------------------------
+    # 【按鈕 B：⚡ 階段 2：純腳本獨立鍛造（全面解放 extends）】
+    # -----------------------------------------------------------------
+    with col_btn_gd:
+        btn_gd = st.button("⚡ 階段 2：生成純 GD 邏輯腳本", type="primary", use_container_width=True)
+        if btn_gd:
+            if not base_name or not instruction:
+                st.warning("📡 參數不足（需要核心名稱與指令）。")
+            else:
+                try:
+                    genai.configure(api_key=FINAL_KEY, transport="rest")
                     model = genai.GenerativeModel(AI_MODEL)
                     
-                    # 核心 Prompt：賦予 AI 區分「新寫」與「修改」的能力
-                    prompt = f"""
-                    你是一位資深的 Godot 架構師。
-                    目標檔案：{target_file_name}
-                    操作模式：{forge_mode}
-                    
-                    [原始內容] (若是全新鍛造則為空)
-                    {selected_script_content}
-                    
-                    [PDF 參考資料]
-                    {pdf_context[:5000]}
-                    
-                    [修改需求]
-                    {instruction}
-                    
-                    請根據需求，重寫整份檔案的代碼。
-                    請僅回傳代碼內容，不要有解釋文字，不要包含 Markdown 代碼塊標籤。
-                    """
-                    
-                    response = model.generate_content(prompt)
-                    new_code = response.text.strip()
+                    # 決定要生成的純腳本列表
+                    gd_files = [f"{base_name}.gd"] if forge_mode != "🔧 既有檔案重塑" else [target_file] if target_file.endswith(".gd") else [f"{base_name}.gd"]
+                    if forge_mode == "✨ 全新實體鍛造" and is_batch:
+                        gd_files = [f"{base_name}_{s}.gd" for s in suffixes if s]
 
-                    # 6. 物理覆蓋/寫入
-                    save_path = os.path.join(script_folder, target_file_name)
-                    with open(save_path, "w", encoding="utf-8") as f:
-                        f.write(new_code)
+                    for filename in gd_files:
+                        save_path = os.path.join(script_folder, filename)
+                        gd_node_name = filename.replace(".gd", "")
+                        
+                        # 🔄 自動動態分析當前處理的後綴
+                        current_suffix = ""
+                        if "_" in gd_node_name:
+                            current_suffix = gd_node_name.split("_")[-1]
+
+                        # 🔮 啟動 AI 後綴型別核心推演（純腳本無場景環境）
+                        with st.spinner(f"🔮 正在推演純腳本 `{filename}` 的 extends 繼承父類..."):
+                            suffix_context = f"目前這個純腳本檔案叫作：{gd_node_name}，它的特定後綴是：{current_suffix}。" if current_suffix else ""
+                            
+                            type_ghost_prompt = f"""
+你現在是 Godot 4 專家。目前使用者正在建立一個「不需要掛載任何 TSCN 場景」的純邏輯 GDScript 腳本。
+整體核心邏輯需求是：'{instruction}'
+{suffix_context}
+
+請根據這個純腳本在系統中可能扮演的角色（例如：控制、狀態、判定、數據），從以下標準型別中，精準挑選一個最適合被該腳本 extends 繼承的父類別名稱：
+[Area2D, CharacterBody2D, RigidBody2D, StaticBody2D, Node2D, Timer, Control, RefCounted, Resource, Node]
+
+[硬性規範]：你只能回傳該型別的英文單字本身（例如：Area2D、Resource 或 Node），絕對不要給我任何標點符號、任何 Markdown 粗體、任何解釋文字。
+"""
+                            ghost_res = model.generate_content(type_ghost_prompt)
+                            detected_node_type = ghost_res.text.strip().replace("`", "").replace("*", "").replace(":", "").replace('"', '').replace("'", "")
+                            
+                            # 防呆安全網
+                            if not detected_node_type or len(detected_node_type.split()) > 1:
+                                detected_node_type = "Node"
+                            
+                            st.caption(f"✨ `{filename}` 繼承骨架確認 ➔ `extends {detected_node_type}`")
+
+                        # 🛡️ 備份舊腳本
+                        if os.path.exists(save_path):
+                            timestamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
+                            bak_path = os.path.join(backup_root, f"{filename}_{timestamp}.bak")
+                            shutil.copy2(save_path, bak_path)
+                            st.caption(f"🛡️ 已自動備份舊腳本：`{filename}`")
+
+                        # 🚀 鐵血代碼鍛造
+                        with st.spinner(f"🚀 Gemini 正在撰寫純邏輯代碼 `{filename}`..."):
+                            dynamic_instruction = f"""
+{st.session_state.custom_forge_prompt}
+[硬性規範]：這是一個純邏輯腳本，請確保代碼的第一行嚴格寫死為：extends {detected_node_type}
+
+[目標檔案]：{filename}
+[指令]：{instruction}
+[參考規範]：{pdf_txt[:3000]}
+"""
+                            response = model.generate_content(dynamic_instruction)
+                            code = response.text.replace("```gdscript", "").replace("```", "").strip()
+
+                            # 物理寫入硬碟
+                            with open(save_path, "w", encoding="utf-8") as f:
+                                f.write(code + "\n")
+                            st.success(f"✅ 純邏輯腳本鍛造完成：`{filename}` (已繼承 {detected_node_type})")
                     
-                    st.success(f"✅ 腳本物理更新成功：`{save_path}`")
-                    st.code(new_code)
                     st.balloons()
-            except Exception as e:
-                st.error(f"❌ 重塑失敗：{str(e)}")
+                except Exception as e:
+                    st.error(f"❌ 純腳本鍛造失敗: {str(e)}")
 
-    # --- 7. 管理既有腳本庫 ---
+    # --- 6. 腳本庫管理 ---
     st.divider()
-    st.subheader("📂 腳本庫物理狀態")
-    for s in existing_scripts:
-        with st.expander(f"📄 {s}"):
-            s_p = os.path.join(script_folder, s)
-            with open(s_p, "r", encoding="utf-8") as f:
-                st.code(f.read())
-            if st.button(f"🗑️ 抹除 {s}", key=f"del_{s}"):
-                os.remove(s_p)
+    st.subheader(f"📂 實體資料夾：`{os.path.basename(script_folder)}`")
+    updated_files = [f for f in os.listdir(script_folder) if not f.startswith(".")]
+    for f_item in updated_files:
+        c1, c2 = st.columns([5, 1])
+        with c1:
+            with st.expander(f"📄 {f_item}"):
+                with open(os.path.join(script_folder, f_item), "r", encoding="utf-8") as f_content:
+                    lang = "gdscript" if f_item.endswith(".gd") else "toml"
+                    st.code(f_content.read(), language=lang)
+        with c2:
+            if st.button("🗑️", key=f"del_{f_item}"):
+                os.remove(os.path.join(script_folder, f_item))
                 st.rerun()

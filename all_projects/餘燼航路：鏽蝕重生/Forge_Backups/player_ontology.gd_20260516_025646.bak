@@ -1,0 +1,34 @@
+extends Node2D
+class_name PlayerOntology
+
+## 餘燼航路：鏽蝕重生 - 玩家本體碰撞架構
+## 負責管理玩家物理層級與碰撞偵測的核心節點
+
+signal body_entered_hazard(hazard_type: String)
+
+@export_group("Physics Configuration")
+@export var collision_layer_mask: int = 1
+@export var collision_mask_mask: int = 1
+
+@onready var collision_shape: CollisionShape2D = $CollisionShape2D
+
+func _ready() -> void:
+	# 初始化碰撞區域屬性
+	_setup_physics_layers()
+
+func _setup_physics_layers() -> void:
+	# 確保作為 Node2D 結構下的 Area2D 或 CharacterBody2D 繼承者具備正確層級
+	# 此處假設子節點為物理偵測區
+	if has_node("HitboxArea"):
+		var hitbox: Area2D = get_node("HitboxArea")
+		hitbox.collision_layer = collision_layer_mask
+		hitbox.collision_mask = collision_mask_mask
+		hitbox.body_entered.connect(_on_body_entered)
+
+func _on_body_entered(body: Node2D) -> void:
+	if body.is_in_group("Hazards"):
+		body_entered_hazard.emit(body.get_meta("hazard_type", "generic"))
+
+func update_hitbox_shape(new_shape: Shape2D) -> void:
+	if collision_shape:
+		collision_shape.shape = new_shape

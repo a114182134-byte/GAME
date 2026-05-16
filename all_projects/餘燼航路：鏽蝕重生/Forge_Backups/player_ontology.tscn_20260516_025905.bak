@@ -1,0 +1,25 @@
+[gd_scene format=3 uid="uid://dcq7f2l1rwacu"]
+
+[ext_resource type="Script" uid="uid://cr3b06lc52pii" path="res://scene+script/player_ontology.gd" id="1_2xauq"]
+
+[node name="PlayerOntology" type="Node2D" unique_id=1318821884]
+script = ExtResource("1_2xauq")
+
+[node name="InputLayer" type="Node" parent="." unique_id=1099944305]
+unique_name_in_owner = true
+process_priority = 1
+
+[node name="OutputLayer" type="Node" parent="." unique_id=533338718]
+unique_name_in_owner = true
+process_priority = 3
+
+[node name="DetectLayer" type="Area2D" parent="." unique_id=427107463]
+unique_name_in_owner = true
+collision_layer = 2
+collision_mask = 4
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="DetectLayer" unique_id=1350810160]
+
+[node name="OntologyCore" type="Node" parent="." unique_id=1476870178]
+unique_name_in_owner = true
+process_priority = 2

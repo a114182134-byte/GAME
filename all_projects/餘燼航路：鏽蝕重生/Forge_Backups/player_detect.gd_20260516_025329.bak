@@ -1,0 +1,45 @@
+extends Node2D
+class_name PlayerDetector
+
+# Ontology: 本體節點定義
+@onready var detection_area: Area2D = $DetectionArea
+@onready var collision_shape: CollisionShape2D = $DetectionArea/CollisionShape2D
+
+# Input: 輸入參數與狀態
+@export var detection_radius: float = 250.0
+@export var target_group: String = "player"
+var _detected_entities: Array[Node2D] = []
+
+# Detect: 偵測邏輯
+func _ready() -> void:
+	detection_area.body_entered.connect(_on_body_entered)
+	detection_area.body_exited.connect(_on_body_exited)
+	if collision_shape.shape is CircleShape2D:
+		collision_shape.shape.radius = detection_radius
+
+func _on_body_entered(body: Node2D) -> void:
+	if body.is_in_group(target_group):
+		if not _detected_entities.has(body):
+			_detected_entities.append(body)
+
+func _on_body_exited(body: Node2D) -> void:
+	if _detected_entities.has(body):
+		_detected_entities.erase(body)
+
+# Output: 輸出偵測結果
+func get_closest_player() -> Node2D:
+	if _detected_entities.is_empty():
+		return null
+	
+	var closest: Node2D = null
+	var min_dist: float = INF
+	
+	for entity in _detected_entities:
+		var dist = global_position.distance_to(entity.global_position)
+		if dist < min_dist:
+			min_dist = dist
+			closest = entity
+	return closest
+
+func is_player_in_range() -> bool:
+	return _detected_entities.size() > 0

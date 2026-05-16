@@ -1,0 +1,49 @@
+extends Area2D
+class_name PlayerOntology
+
+signal input_received(input_data: Dictionary)
+signal detection_triggered(target: Node2D)
+signal output_emitted(effect: String)
+
+var _input_buffer: Array = []
+var _entity_state: Dictionary = {"health": 100, "status": "active"}
+
+func _process(_delta: float) -> void:
+	_detect_surroundings()
+
+# --- Input: 處理外部輸入 ---
+func handle_input(event_type: String, value: Variant) -> void:
+	var input_data = {"type": event_type, "value": value, "timestamp": Time.get_ticks_msec()}
+	_input_buffer.append(input_data)
+	input_received.emit(input_data)
+	_process_input_logic(input_data)
+
+func _process_input_logic(data: Dictionary) -> void:
+	if data.type == "move":
+		position += data.value
+
+# --- Output: 執行行為輸出 ---
+func trigger_output(action_id: String) -> void:
+	match action_id:
+		"attack":
+			output_emitted.emit("damage_dealt")
+		"interact":
+			output_emitted.emit("interaction_success")
+
+# --- Detect: 感知區域偵測 ---
+func _detect_surroundings() -> void:
+	var areas = get_overlapping_areas()
+	for area in areas:
+		if area.has_method("is_interactable"):
+			detection_triggered.emit(area)
+
+# --- Ontology: 本體狀態管理 ---
+func get_ontology_state() -> Dictionary:
+	return {
+		"id": self.get_instance_id(),
+		"attributes": _entity_state,
+		"is_alive": _entity_state.health > 0
+	}
+
+func update_ontology_status(key: String, value: Variant) -> void:
+	_entity_state[key] = value

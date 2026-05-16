@@ -1,0 +1,6 @@
+[gd_scene format=3]
+
+[node name="player_Input" type="Node"]
+
+# ─── AI 智能推演子節點 ───
+[node name="player_Input" type="Node" parent="."]
