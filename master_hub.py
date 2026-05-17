@@ -297,8 +297,8 @@ for d in [LOG_DIR, MEDIA_DIR, ARCHIVE_DIR]:
 
 
 if channel == "📸 素材打撈 (Media)":
-    st.title("📸 殘留影像與波形打撈")
-    st.caption("🤖 透過自定義「核心協議」深度解析影像、聲波與 PDF 規範")
+    st.title("📸 殘流影像與波形打撈")
+    st.caption("🤖 透過自定義「核心協議」深度解析影像、聲波與 PDF 規範，並自動歸檔至航行日誌")
     st.markdown("---")
 
     # ⚡ 核心優化：發射站識別 (acer 主機環境適配)
@@ -310,6 +310,12 @@ if channel == "📸 素材打撈 (Media)":
         station_origin = st.selectbox("📍 當前發射站", ["總部 (acer)", "台北站", "新竹站", "台南站"])
     with col_info:
         st.caption(f"📡 設備類型：`{dev_type}` | 接入網址：`{st.context.headers.get('Host')}`")
+
+    # 📜 專案特化路徑自癒核心 (精準歸檔至當前專案資料夾)
+    project_root = os.path.join(DATA_ROOT, current_p_name)
+    log_file_path = os.path.join(project_root, "voyage_logs.json")
+    saved_media_dir = os.path.join(project_root, "voyage_media_assets")
+    os.makedirs(saved_media_dir, exist_ok=True) # 確保專案專屬的日誌素材庫存在
 
     # --- [區塊 A] 配置打撈核心協議 (System Instruction) ---
     with st.expander("🛠️ 配置打撈核心協議 (長期底層規則)", expanded=False):
@@ -323,7 +329,7 @@ if channel == "📸 素材打撈 (Media)":
 
 [啟示指南]
 1. 視覺拆解：分析構圖、色調是否符合專案設定。
-2. 聲學轉譯：將音訊描述為具體的遊戲環境音效需求（如：金屬摩擦聲、蒸汽噴發聲）。
+2. 聲學轉譯：將音訊描述為具體的游戏環境音效需求（如：金屬摩擦聲、蒸汽噴發聲）。
 3. 規範對齊：嚴格遵守 PDF 提供的視覺或敘事準則。"""
 
         if "custom_media_prompt" not in st.session_state:
@@ -350,7 +356,6 @@ if channel == "📸 素材打撈 (Media)":
         u_pdf = st.file_uploader("📋 導入規範 (PDF)", type=['pdf'], key="media_pdf_up")
         pdf_context = ""
         if u_pdf:
-            import PyPDF2
             pdf_reader = PyPDF2.PdfReader(u_pdf)
             for page in pdf_reader.pages:
                 pdf_context += (page.extract_text() or "") + "\n"
@@ -359,6 +364,7 @@ if channel == "📸 素材打撈 (Media)":
     # --- [區塊 C] 多媒體素材擷取區 ---
     st.subheader("🎤 語音靈感捕捉")
     from audio_recorder_streamlit import audio_recorder
+    # 注意：將麥克風暫存檔改為丟到專案肚子裡的 saved_media_dir，防止全域變數 MEDIA_DIR 衝突
     audio_bytes = audio_recorder(
         text=f"來自【{station_origin}】的通訊",
         recording_color="#e74c3c", neutral_color="#D4AF37", icon_size="2x"
@@ -367,8 +373,9 @@ if channel == "📸 素材打撈 (Media)":
     if audio_bytes:
         if "last_mic_data" not in st.session_state or st.session_state.last_mic_data != audio_bytes:
             timestamp = datetime.datetime.now().strftime('%m%d_%H%M%S')
-            mic_path = os.path.join(MEDIA_DIR, f"mic_{station_origin}_{timestamp}.wav")
-            with open(mic_path, "wb") as f: f.write(audio_bytes)
+            mic_path = os.path.join(saved_media_dir, f"mic_{station_origin}_{timestamp}.wav")
+            with open(mic_path, "wb") as f: 
+                f.write(audio_bytes)
             st.session_state.last_mic_data = audio_bytes 
             st.sidebar.success(f"🎙️ 聲波已歸檔")
         st.audio(audio_bytes, format="audio/wav")
@@ -379,12 +386,12 @@ if channel == "📸 素材打撈 (Media)":
     with col_up1:
         u_img = st.file_uploader("🖼️ 影像打撈", type=['png', 'jpg', 'jpeg', 'webp'])
         if u_img:
-            from PIL import Image
             img = Image.open(u_img)
             st.image(img, caption="🚀 待處理影像預覽", use_column_width=True)
     with col_up2:
         u_audio = st.file_uploader("🎵 音訊打撈", type=['mp3', 'wav', 'ogg', 'm4a'])
-        if u_audio: st.audio(u_audio)
+        if u_audio: 
+            st.audio(u_audio)
 
     # --- [區塊 D] 執行動作 ---
     st.markdown("---")
@@ -394,30 +401,132 @@ if channel == "📸 素材打撈 (Media)":
     with col_btn2:
         draw_btn = st.button("🎨 請求虛空重塑 (Imagen 3)", use_container_width=True, type="primary")
 
-    # --- 邏輯 A：Gemini 1.5 Pro 深度解析 ---
+    # --- 邏輯 A：Gemini 深度解析 + 自動物理歸檔航行日誌 ---
     if analyze_btn:
         if not (u_img or u_audio or u_text or audio_bytes or u_pdf):
             st.warning("📡 數據不足，請提供素材、靈感或 PDF 規範。")
         else:
             with st.spinner("正在對齊核心協議進行打撈報告..."):
                 try:
-                    import google.generativeai as genai
+                    time_now_str = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                    file_timestamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
+
                     full_system_instruction = f"{st.session_state.custom_media_prompt}\n\n[專案 PDF 規範知識庫]：\n{pdf_context[:8000]}"
                     user_payload = []
                     current_task = u_text if u_text else "請根據核心協議與 PDF 規範分析此素材。"
                     user_payload.append(f"【當前任務描述】：{current_task}")
-                    if u_img: user_payload.append(img)
-                    if audio_bytes: user_payload.append({"mime_type": "audio/wav", "data": audio_bytes})
+                    
+                    # 用來存檔至 JSON 的相對或絕對路徑指針
+                    logged_img_path = ""
+                    logged_audio_path = ""
+
+                    # 1. 處理並複製影像實體
+                    if u_img: 
+                        user_payload.append(img)
+                        # 檔名進行去空格自癒，防止 Godot 或系統路徑解析失敗
+                        safe_img_name = u_img.name.replace(" ", "_")
+                        logged_img_path = os.path.join(saved_media_dir, f"salvage_{file_timestamp}_{safe_img_name}")
+                        with open(logged_img_path, "wb") as f_img:
+                            u_img.seek(0)
+                            f_img.write(u_img.read())
+
+                    # 2. 處理麥克風錄音
+                    if audio_bytes: 
+                        user_payload.append({"mime_type": "audio/wav", "data": audio_bytes})
+                        logged_audio_path = os.path.join(saved_media_dir, f"mic_salvage_{file_timestamp}.wav")
+                        with open(logged_audio_path, "wb") as f_mic:
+                            f_mic.write(audio_bytes)
+
+                    # 3. 處理獨立上傳音訊
                     if u_audio: 
                         u_audio.seek(0)
-                        user_payload.append({"mime_type": u_audio.type, "data": u_audio.read()})
+                        audio_data = u_audio.read()
+                        user_payload.append({"mime_type": u_audio.type, "data": audio_data})
+                        if not logged_audio_path: # 如果沒有麥克風錄音，就優先備份這個上傳的音訊
+                            safe_aud_name = u_audio.name.replace(" ", "_")
+                            logged_audio_path = os.path.join(saved_media_dir, f"audio_{file_timestamp}_{safe_aud_name}")
+                            with open(logged_audio_path, "wb") as f_aud:
+                                f_aud.write(audio_data)
+
+                    # 4. 調度配置好的 FINAL_KEY 發射解析
                     genai.configure(api_key=FINAL_KEY)
                     model = genai.GenerativeModel(model_name=AI_MODEL, system_instruction=full_system_instruction)
                     response = model.generate_content(user_payload)
+                    report_text = response.text
+
+                    # 畫面上即時渲染報告
                     st.markdown("### 📝 素材打撈分析報告")
-                    st.info(response.text)
+                    st.info(report_text)
+
+                    # 💾 ─── 航行日誌落盤保存電路 ───
+                    history_logs = []
+                    if os.path.exists(log_file_path):
+                        with open(log_file_path, "r", encoding="utf-8") as f_log:
+                            try:
+                                history_logs = json.load(f_log)
+                            except:
+                                history_logs = []
+
+                    # 封裝結構化日誌數據
+                    new_log_entry = {
+                        "timestamp": time_now_str,
+                        "station": station_origin,
+                        "device": dev_type,
+                        "task_description": current_task,
+                        "ai_analysis_report": report_text,
+                        "has_pdf_knowledge": True if u_pdf else False,
+                        "associated_assets": {
+                            "image_path": logged_img_path,
+                            "audio_path": logged_audio_path
+                        }
+                    }
+
+                    # 新增至最前面（最新紀錄置頂）
+                    history_logs.insert(0, new_log_entry)
+
+                    # 強制寫入 JSON
+                    with open(log_file_path, "w", encoding="utf-8") as f_log_write:
+                        json.dump(history_logs, f_log_write, ensure_ascii=False, indent=4)
+                    
+                    st.success(f"💾 數據落盤成功！已記入專案日誌 (`{os.path.basename(log_file_path)}`)")
+                    st.balloons()
+
                 except Exception as e:
-                    st.error(f"❌ 解析引擎故障: {str(e)}")
+                    st.error(f"❌ 解析或日誌落盤失敗: {str(e)}")
+
+    # --- [區塊 E] 航行日誌歷史檢視器 ---
+    st.markdown("---")
+    st.subheader("📜 歷史航行日誌庫預覽")
+    
+    if os.path.exists(log_file_path):
+        with open(log_file_path, "r", encoding="utf-8") as f_read_view:
+            try:
+                current_logs = json.load(f_read_view)
+            except:
+                current_logs = []
+                
+        if not current_logs:
+            st.caption("🌊 目前海面平靜，日誌庫尚無波瀾。")
+        else:
+            # 畫面預覽最新 10 筆紀錄，防止效能過載
+            for i, log in enumerate(current_logs[:10]): 
+                with st.expander(f"⚓ [{log['timestamp']}] 來自 {log['station']} 的打撈紀錄"):
+                    st.markdown(f"**📡 傳輸終端：** `{log['device']}` | **📑 PDF 規範狀態：** {'🟢 已對齊' if log['has_pdf_knowledge'] else '❌ 未導入'}")
+                    st.markdown(f"**🎯 靈感咒語需求：**\n>{log['task_description']}")
+                    st.markdown("**📝 打撈報告正文：**")
+                    st.info(log['ai_analysis_report'])
+                    
+                    # 實體多媒體檔案回溯反向渲染
+                    assets = log.get("associated_assets", {})
+                    c_img, c_aud = st.columns(2)
+                    with c_img:
+                        if assets.get("image_path") and os.path.exists(assets["image_path"]):
+                            st.image(assets["image_path"], caption="🖼️ 歸檔影像備份", use_column_width=True)
+                    with c_aud:
+                        if assets.get("audio_path") and os.path.exists(assets["audio_path"]):
+                            st.audio(assets["audio_path"])
+    else:
+        st.caption("🌊 目前海面平靜，日誌庫尚無波瀾。")
 
 # --- 邏輯 B：Vertex AI Imagen 3 具現化 (全變數注入穩定版) ---
     if draw_btn:
